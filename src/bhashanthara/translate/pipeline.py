@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from bhashanthara.datasets.schema import MCQItem, TranslationMetadata, TranslatedMCQItem
+from bhashanthara.datasets.schema import MCQItem, TranslatedMCQItem, TranslationMetadata
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
 from bhashanthara.translate.checks import run_automatic_checks
 from bhashanthara.translate.decide import decide_status
 from bhashanthara.translate.generate import translate_item
-from bhashanthara.translate.verify import review_answer_preservation, review_sinhala_quality
+from bhashanthara.translate.verify import (
+    review_answer_preservation,
+    review_sinhala_quality,
+)
 
 
 def _set_translation_metadata(
