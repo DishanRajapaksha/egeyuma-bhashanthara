@@ -27,7 +27,6 @@ build/
 
 # Generated data and audits
 data/generated/
-data/raw/mmlu-csv/
 audits/
 review/labelstudio_export.json
 
