@@ -23,6 +23,7 @@ from bhashanthara.review.labelstudio import (
     apply_labelstudio_reviews,
     export_labelstudio_tasks,
 )
+from bhashanthara.translate.backtranslate import add_backtranslations, backtranslation_report
 from bhashanthara.translate.pipeline import translate_many, translate_verify_item
 
 app = typer.Typer(help="Local-first Sinhala benchmark translation and verification pipeline.")
@@ -216,6 +217,49 @@ def pipeline(
 
     write_jsonl(output, (item.model_dump() for item in translated))
     console.print(f"[green]Wrote[/green] {output} ({len(translated)} items)")
+
+
+@translate_app.command("backtranslate")
+def backtranslate(
+    input: Annotated[Path, typer.Option(help="Translated Sinhala JSONL input.")],
+    output: Annotated[Path, typer.Option(help="Translated JSONL with backtranslation metadata.")],
+    model: Annotated[str, typer.Option(help="Backtranslation model name.")],
+    report_output: Annotated[
+        Path | None,
+        typer.Option(help="Optional JSON report of backtranslations."),
+    ] = None,
+    base_url: Annotated[
+        str,
+        typer.Option(help="OpenAI-compatible base URL."),
+    ] = "http://localhost:1234/v1",
+    api_key: Annotated[str, typer.Option(help="API key for the endpoint.")] = "local-key",
+    temperature: Annotated[float, typer.Option(help="Sampling temperature.")] = 0.0,
+    max_tokens: Annotated[int, typer.Option(help="Maximum generated tokens.")] = 2048,
+    limit: Annotated[int | None, typer.Option(help="Optional item limit for pilots.")] = None,
+) -> None:
+    """Backtranslate Sinhala items into English for drift inspection."""
+
+    try:
+        items = load_translated_jsonl(input)
+    except DatasetError as exc:
+        console.print(f"[red]Invalid translated dataset:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    client = _client(
+        model=model,
+        base_url=base_url,
+        api_key=api_key,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    updated = add_backtranslations(items, client, limit=limit)
+    write_jsonl(output, (item.model_dump() for item in updated))
+    console.print(f"[green]Wrote[/green] {output} ({len(updated)} items)")
+
+    if report_output is not None:
+        reports = [report for item in updated if (report := backtranslation_report(item))]
+        write_json(report_output, {"backtranslations": reports})
+        console.print(f"[green]Wrote[/green] {report_output} ({len(reports)} reports)")
 
 
 @review_app.command("export-labelstudio")
