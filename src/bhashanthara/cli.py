@@ -5,19 +5,25 @@ from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.table import Table
 
 from bhashanthara.datasets.jsonl import (
     DatasetError,
     load_mcq_jsonl,
     load_translated_jsonl,
+    write_json,
     write_jsonl,
 )
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
+from bhashanthara.reports.stats import collect_translation_stats
+from bhashanthara.review.labelstudio import LABEL_CONFIG, export_labelstudio_tasks
 from bhashanthara.translate.pipeline import translate_many, translate_verify_item
 
 app = typer.Typer(help="Local-first Sinhala benchmark translation and verification pipeline.")
 translate_app = typer.Typer(help="Translate and verify MCQ datasets.")
+review_app = typer.Typer(help="Export and import human review tasks.")
 app.add_typer(translate_app, name="translate")
+app.add_typer(review_app, name="review")
 console = Console()
 
 
@@ -49,6 +55,34 @@ def validate(input: Path) -> None:
         raise typer.Exit(code=1) from exc
 
     console.print(f"[green]Valid dataset[/green]: {input} ({len(items)} items)")
+
+
+@app.command()
+def stats(
+    input: Annotated[Path, typer.Option(help="Translated Sinhala JSONL input.")],
+    output: Annotated[Path | None, typer.Option(help="Optional JSON report output.")] = None,
+) -> None:
+    """Show translation status and suspicious-item counts."""
+
+    try:
+        items = load_translated_jsonl(input)
+    except DatasetError as exc:
+        console.print(f"[red]Invalid translated dataset:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    report = collect_translation_stats(items)
+    table = Table(title="Bhashanthara translation stats")
+    table.add_column("Metric")
+    table.add_column("Value", justify="right")
+    table.add_row("total", str(report.total))
+    table.add_row("suspicious", str(report.suspicious_count))
+    for status, count in report.by_status.items():
+        table.add_row(f"status:{status}", str(count))
+    console.print(table)
+
+    if output is not None:
+        write_json(output, report.as_dict())
+        console.print(f"[green]Wrote[/green] {output}")
 
 
 @translate_app.command("validate")
@@ -174,3 +208,34 @@ def pipeline(
 
     write_jsonl(output, (item.model_dump() for item in translated))
     console.print(f"[green]Wrote[/green] {output} ({len(translated)} items)")
+
+
+@review_app.command("export-labelstudio")
+def export_labelstudio(
+    input: Annotated[Path, typer.Option(help="Translated Sinhala JSONL input.")],
+    output: Annotated[Path, typer.Option(help="Label Studio task JSON output.")],
+    include_all: Annotated[
+        bool,
+        typer.Option(help="Export all items instead of suspicious items only."),
+    ] = False,
+    label_config_output: Annotated[
+        Path | None,
+        typer.Option(help="Optional file path for Label Studio XML config."),
+    ] = None,
+) -> None:
+    """Export translated items into Label Studio task JSON."""
+
+    try:
+        items = load_translated_jsonl(input)
+    except DatasetError as exc:
+        console.print(f"[red]Invalid translated dataset:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    tasks = export_labelstudio_tasks(items, suspicious_only=not include_all)
+    write_json(output, {"tasks": tasks})
+    console.print(f"[green]Wrote[/green] {output} ({len(tasks)} tasks)")
+
+    if label_config_output is not None:
+        label_config_output.parent.mkdir(parents=True, exist_ok=True)
+        label_config_output.write_text(LABEL_CONFIG, encoding="utf-8")
+        console.print(f"[green]Wrote[/green] {label_config_output}")
