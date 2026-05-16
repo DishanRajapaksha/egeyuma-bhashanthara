@@ -60,7 +60,10 @@ def test_pipeline_failure_as_dict() -> None:
     assert failure.as_dict()["error_message"] == "bad json"
 
 
-def test_run_resumable_pipeline_skips_completed_items(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_resumable_pipeline_skips_completed_items(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     output = tmp_path / "out.jsonl"
     output.write_text(translated("item_001").model_dump_json() + "\n", encoding="utf-8")
 
@@ -82,7 +85,10 @@ def test_run_resumable_pipeline_skips_completed_items(monkeypatch: pytest.Monkey
     assert [entry.id for entry in load_translated_jsonl(output)] == ["item_001_si", "item_002_si"]
 
 
-def test_run_resumable_pipeline_logs_failures(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_run_resumable_pipeline_logs_failures(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     output = tmp_path / "out.jsonl"
     failures = tmp_path / "failures.jsonl"
 
