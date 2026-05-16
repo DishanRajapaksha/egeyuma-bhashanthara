@@ -9,6 +9,7 @@ from bhashanthara.datasets.schema import (
     MCQItem,
     SinhalaQualityReview,
     TranslatedMCQItem,
+    TranslationRepairCandidate,
 )
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
 from bhashanthara.translate.generate import load_prompt
@@ -62,3 +63,16 @@ def review_answer_preservation(
     )
     response = client.complete(prompt)
     return AnswerPreservationReview.model_validate(extract_json_object(response.content))
+
+
+def repair_translation(
+    original: MCQItem,
+    translated: TranslatedMCQItem,
+    client: OpenAICompatibleClient,
+) -> TranslationRepairCandidate:
+    template = load_prompt("repair_translation_v1.txt")
+    prompt = template.format(
+        input_json=json.dumps(_review_payload(original, translated), ensure_ascii=False, indent=2)
+    )
+    response = client.complete(prompt)
+    return TranslationRepairCandidate.model_validate(extract_json_object(response.content))

@@ -95,6 +95,10 @@ class TranslationCandidate(BaseModel):
     notes: str = ""
 
 
+class TranslationRepairCandidate(TranslationCandidate):
+    repaired: bool = True
+
+
 class TranslatedMCQItem(MCQItem):
     language_style: str = "translated_sinhala"
 

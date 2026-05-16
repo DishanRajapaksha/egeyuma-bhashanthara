@@ -34,7 +34,7 @@ from bhashanthara.review.labelstudio import (
     export_labelstudio_tasks,
 )
 from bhashanthara.translate.backtranslate import add_backtranslations, backtranslation_report
-from bhashanthara.translate.pipeline import translate_many
+from bhashanthara.translate.pipeline import review_existing_translation, translate_many
 from bhashanthara.translate.resumable import run_resumable_pipeline
 
 app = typer.Typer(help="Local-first Sinhala benchmark translation and verification pipeline.")
@@ -133,6 +133,15 @@ def _pipeline_prompt_files(
     if include_answer_review:
         prompts.append(PROMPT_DIR / "review_answer_preservation_v1.txt")
     return [path for path in prompts if path.exists()]
+
+
+def _original_id_for_review(item_id: str, metadata: dict[str, Any]) -> str:
+    original_id = metadata.get("original_id")
+    if isinstance(original_id, str) and original_id:
+        return original_id
+    if item_id.endswith("_si"):
+        return item_id.removesuffix("_si")
+    return item_id
 
 
 @app.command()
@@ -438,6 +447,114 @@ def validate_translated(input: Path) -> None:
         raise typer.Exit(code=1) from exc
 
     console.print(f"[green]Valid translated dataset[/green]: {input} ({len(items)} items)")
+
+
+@translate_app.command("review")
+def review_translated(
+    input: Annotated[Path, typer.Option(help="Canonical English MCQ JSONL input.")],
+    translated: Annotated[Path, typer.Option(help="Existing translated Sinhala JSONL input.")],
+    output: Annotated[Path, typer.Option(help="Reviewed translated JSONL output.")],
+    sinhala_reviewer: Annotated[
+        str | None,
+        typer.Option(help="Optional Sinhala quality reviewer model."),
+    ] = None,
+    answer_reviewer: Annotated[
+        str | None,
+        typer.Option(help="Optional answer-preservation reviewer model."),
+    ] = None,
+    repairer: Annotated[
+        str | None,
+        typer.Option(help="Optional model that rewrites the Sinhala question and choices."),
+    ] = None,
+    base_url: Annotated[
+        str,
+        typer.Option(help="OpenAI-compatible base URL."),
+    ] = "http://localhost:1234/v1",
+    api_key: Annotated[str, typer.Option(help="API key for the endpoint.")] = "local-key",
+    temperature: Annotated[float, typer.Option(help="Sampling temperature.")] = 0.0,
+    max_tokens: Annotated[int, typer.Option(help="Maximum generated tokens.")] = 2048,
+    timeout_seconds: Annotated[
+        float,
+        typer.Option(help="HTTP timeout per model request, in seconds."),
+    ] = 300.0,
+    limit: Annotated[int | None, typer.Option(help="Optional item limit for pilots.")] = None,
+) -> None:
+    """Review existing translations without regenerating them."""
+
+    if sinhala_reviewer is None and answer_reviewer is None and repairer is None:
+        console.print("[red]At least one reviewer or repair model is required.[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        originals = load_mcq_jsonl(input)
+        translated_items = load_translated_jsonl(translated)
+    except DatasetError as exc:
+        console.print(f"[red]Invalid review input:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    originals_by_id = {item.id: item for item in originals}
+    selected = translated_items[:limit] if limit is not None else translated_items
+
+    sinhala_client = (
+        _client(
+            model=sinhala_reviewer,
+            base_url=base_url,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout_seconds=timeout_seconds,
+        )
+        if sinhala_reviewer
+        else None
+    )
+    answer_client = (
+        _client(
+            model=answer_reviewer,
+            base_url=base_url,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout_seconds=timeout_seconds,
+        )
+        if answer_reviewer
+        else None
+    )
+    repair_client = (
+        _client(
+            model=repairer,
+            base_url=base_url,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout_seconds=timeout_seconds,
+        )
+        if repairer
+        else None
+    )
+
+    reviewed = []
+    for index, translated_item in enumerate(selected, start=1):
+        original_id = _original_id_for_review(translated_item.id, translated_item.metadata)
+        original = originals_by_id.get(original_id)
+        if original is None:
+            console.print(
+                f"[red]Missing original item for translated item:[/red] {translated_item.id}"
+            )
+            raise typer.Exit(code=1)
+
+        console.print(f"Reviewing {index}/{len(selected)}: {translated_item.id}")
+        reviewed.append(
+            review_existing_translation(
+                original,
+                translated_item,
+                sinhala_reviewer=sinhala_client,
+                answer_reviewer=answer_client,
+                repairer=repair_client,
+            )
+        )
+
+    write_jsonl(output, (item.model_dump() for item in reviewed))
+    console.print(f"[green]Wrote[/green] {output} ({len(reviewed)} items)")
 
 
 @translate_app.command("generate")

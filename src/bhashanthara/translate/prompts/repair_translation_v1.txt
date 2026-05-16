@@ -1,0 +1,20 @@
+Repair the Sinhala translation of this multiple-choice question.
+
+You must compare the English original and Sinhala translation.
+Correct only the Sinhala question and choices.
+Do not change the answer index.
+Do not change the order or count of choices.
+Preserve the original English meaning and the correct answer.
+Use natural Sinhala suitable for an exam or benchmark.
+Return JSON only. Do not include markdown.
+
+Input JSON:
+{input_json}
+
+Output JSON schema:
+{{
+  "question": "corrected Sinhala question",
+  "choices": ["corrected Sinhala choice A", "corrected Sinhala choice B", "corrected Sinhala choice C", "corrected Sinhala choice D"],
+  "notes": "specific repair notes, or empty string",
+  "repaired": true
+}}

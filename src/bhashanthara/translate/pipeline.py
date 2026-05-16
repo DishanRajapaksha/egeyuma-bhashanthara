@@ -8,6 +8,7 @@ from bhashanthara.translate.checks import run_automatic_checks
 from bhashanthara.translate.decide import decide_status
 from bhashanthara.translate.generate import translate_item
 from bhashanthara.translate.verify import (
+    repair_translation,
     review_answer_preservation,
     review_sinhala_quality,
 )
@@ -67,6 +68,62 @@ def translate_verify_item(
         answer_preservation=answer_review,
     )
     return _set_translation_metadata(translated, translation)
+
+
+def review_existing_translation(
+    original: MCQItem,
+    translated: TranslatedMCQItem,
+    sinhala_reviewer: OpenAICompatibleClient | None = None,
+    answer_reviewer: OpenAICompatibleClient | None = None,
+    repairer: OpenAICompatibleClient | None = None,
+) -> TranslatedMCQItem:
+    reviewed_item = translated
+    raw_translation = translated.metadata.get("translation", {})
+    translation = TranslationMetadata.model_validate(raw_translation)
+
+    if repairer is not None:
+        repair = repair_translation(original, translated, repairer)
+        if len(repair.choices) != len(translated.choices):
+            raise ValueError(
+                f"repair for {translated.id} changes choice count from "
+                f"{len(translated.choices)} to {len(repair.choices)}"
+            )
+        metadata = dict(translated.metadata)
+        metadata["repair"] = {
+            "status": "model_applied",
+            "model": repairer.model,
+            "notes": repair.notes,
+        }
+        reviewed_item = translated.model_copy(
+            update={
+                "question": repair.question,
+                "choices": repair.choices,
+                "metadata": metadata,
+            }
+        )
+
+    if translation.automatic_checks is None:
+        translation.automatic_checks = run_automatic_checks(original, reviewed_item)
+
+    sinhala_review = translation.sinhala_quality
+    answer_review = translation.answer_preservation
+
+    if sinhala_reviewer is not None:
+        sinhala_review = review_sinhala_quality(original, reviewed_item, sinhala_reviewer)
+        translation.sinhala_reviewer_model = sinhala_reviewer.model
+        translation.sinhala_quality = sinhala_review
+
+    if answer_reviewer is not None:
+        answer_review = review_answer_preservation(original, reviewed_item, answer_reviewer)
+        translation.answer_reviewer_model = answer_reviewer.model
+        translation.answer_preservation = answer_review
+
+    translation.status = decide_status(
+        automatic_checks=translation.automatic_checks,
+        sinhala_quality=sinhala_review,
+        answer_preservation=answer_review,
+    )
+    return _set_translation_metadata(reviewed_item, translation)
 
 
 def translate_many(
