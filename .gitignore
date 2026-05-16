@@ -16,6 +16,11 @@ venv/
 # uv
 uv.lock
 
+# Node/Docusaurus
+node_modules/
+build/
+.docusaurus/
+
 # Local configuration
 .env
 .env.*

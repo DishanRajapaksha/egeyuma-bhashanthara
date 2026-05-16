@@ -1,30 +1,46 @@
-# Egeyuma Bhashanthara
+---
+sidebar_position: 2
+---
 
-Egeyuma Bhashanthara is a local-first Python CLI for translating English multiple-choice benchmark datasets into Sinhala, checking answer preservation, and exporting trusted items for [Egeyuma](https://github.com/DishanRajapaksha/egeyuma).
-
-```text
-egeyuma-bhashanthara  -> creates translated and verified Sinhala datasets
-egeyuma               -> evaluates models using those datasets
-```
+# Quickstart
 
 ## Install
 
 ```bash
 uv sync --dev
-npm --prefix docs-site install
 ```
 
-## Common commands
+Install the Docusaurus docs dependencies when working on the documentation site.
+
+```bash
+npm install
+```
+
+## Fetch and convert MMLU
 
 ```bash
 uv run bhashanthara datasets fetch mmlu
+```
 
+```bash
 uv run bhashanthara datasets convert mmlu \
   --input data/raw/mmlu/test/high_school_biology_test.csv \
   --output data/interim/mmlu-biology.jsonl \
   --subject high_school_biology \
   --domain science
+```
 
+## Validate input
+
+```bash
+uv run bhashanthara validate data/interim/mmlu-biology.jsonl
+```
+
+## Run a local translation pipeline
+
+Start a local OpenAI-compatible server first, for example LM Studio on `http://localhost:1234/v1`.
+
+```bash
 uv run bhashanthara translate pipeline \
   --input data/interim/mmlu-biology.jsonl \
   --output data/generated/mmlu-biology-si-silver.jsonl \
@@ -32,10 +48,13 @@ uv run bhashanthara translate pipeline \
   --sinhala-reviewer gemma-3-12b \
   --answer-reviewer qwen3-32b \
   --base-url http://localhost:1234/v1 \
-  --failures-output audits/mmlu-biology-failures.jsonl \
-  --continue-on-error \
-  --max-retries 2
+  --api-key local-key \
+  --limit 2
+```
 
+## Export for Egeyuma
+
+```bash
 uv run bhashanthara export egeyuma \
   --input data/generated/mmlu-biology-si-silver.jsonl \
   --output data/export/egeyuma-mmlu-biology-si.jsonl \
@@ -44,19 +63,19 @@ uv run bhashanthara export egeyuma \
   --language si
 ```
 
-## Docs
+Use `--min-status gold` for serious leaderboard data.
 
-The full project guide lives in `docs/` and is published with Docusaurus.
-
-```bash
-npm --prefix docs-site run start
-npm --prefix docs-site run build
-```
-
-## Development
+## Develop
 
 ```bash
 uv run ruff check .
 uv run mypy src tests
 uv run pytest
+```
+
+## Build docs
+
+```bash
+npm run start
+npm run build
 ```
