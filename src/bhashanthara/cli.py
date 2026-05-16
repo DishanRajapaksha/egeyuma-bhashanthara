@@ -27,7 +27,8 @@ from bhashanthara.review.labelstudio import (
     export_labelstudio_tasks,
 )
 from bhashanthara.translate.backtranslate import add_backtranslations, backtranslation_report
-from bhashanthara.translate.pipeline import translate_many, translate_verify_item
+from bhashanthara.translate.pipeline import translate_many
+from bhashanthara.translate.resumable import run_resumable_pipeline
 
 app = typer.Typer(help="Local-first Sinhala benchmark translation and verification pipeline.")
 datasets_app = typer.Typer(help="Convert external datasets into Bhashanthara MCQ JSONL.")
@@ -285,6 +286,16 @@ def pipeline(
     temperature: Annotated[float, typer.Option(help="Sampling temperature.")] = 0.0,
     max_tokens: Annotated[int, typer.Option(help="Maximum generated tokens.")] = 2048,
     limit: Annotated[int | None, typer.Option(help="Optional item limit for pilots.")] = None,
+    resume: Annotated[bool, typer.Option(help="Skip items already present in output.")] = False,
+    continue_on_error: Annotated[
+        bool,
+        typer.Option(help="Continue after item failures instead of stopping the run."),
+    ] = False,
+    failures_output: Annotated[
+        Path | None,
+        typer.Option(help="Optional JSONL path for failed items."),
+    ] = None,
+    max_retries: Annotated[int, typer.Option(help="Retries per failed item before giving up.")] = 0,
 ) -> None:
     """Run translation plus optional LLM verification."""
 
@@ -324,22 +335,31 @@ def pipeline(
         else None
     )
 
-    translated = []
-    for index, item in enumerate(items):
-        if limit is not None and index >= limit:
-            break
-        console.print(f"Translating {index + 1}/{limit or len(items)}: {item.id}")
-        translated.append(
-            translate_verify_item(
-                item,
-                translator=translator_client,
-                sinhala_reviewer=sinhala_client,
-                answer_reviewer=answer_client,
-            )
+    try:
+        summary = run_resumable_pipeline(
+            items=items,
+            output_path=output,
+            translator=translator_client,
+            sinhala_reviewer=sinhala_client,
+            answer_reviewer=answer_client,
+            failures_output=failures_output,
+            resume=resume,
+            continue_on_error=continue_on_error,
+            max_retries=max_retries,
+            limit=limit,
+            progress=console.print,
         )
+    except Exception as exc:
+        console.print(f"[red]Pipeline failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
 
-    write_jsonl(output, (item.model_dump() for item in translated))
-    console.print(f"[green]Wrote[/green] {output} ({len(translated)} items)")
+    console.print(
+        "[green]Pipeline complete[/green]: "
+        f"considered={summary.considered} "
+        f"skipped={summary.skipped} "
+        f"translated={summary.translated} "
+        f"failed={summary.failed}"
+    )
 
 
 @translate_app.command("backtranslate")

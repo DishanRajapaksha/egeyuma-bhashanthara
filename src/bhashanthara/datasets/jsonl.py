@@ -57,6 +57,14 @@ def write_jsonl(path: Path, items: Iterable[dict[str, Any]]) -> None:
             handle.write("\n")
 
 
+def append_jsonl(path: Path, items: Iterable[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        for item in items:
+            handle.write(json.dumps(item, ensure_ascii=False, sort_keys=True))
+            handle.write("\n")
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
