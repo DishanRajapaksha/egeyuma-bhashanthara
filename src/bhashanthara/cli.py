@@ -17,6 +17,7 @@ from bhashanthara.datasets.jsonl import (
     write_jsonl,
 )
 from bhashanthara.export.egeyuma import ExportStatus, export_egeyuma_items
+from bhashanthara.manifest.provenance import create_manifest, default_run_id
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
 from bhashanthara.repair.patches import RepairError, apply_repair_records, export_repair_items
 from bhashanthara.reports.stats import collect_translation_stats
@@ -34,11 +35,13 @@ translate_app = typer.Typer(help="Translate and verify MCQ datasets.")
 review_app = typer.Typer(help="Export and import human review tasks.")
 repair_app = typer.Typer(help="Export and apply repaired translations.")
 export_app = typer.Typer(help="Export datasets for downstream evaluation tools.")
+manifest_app = typer.Typer(help="Create run manifests and provenance records.")
 app.add_typer(datasets_app, name="datasets")
 app.add_typer(translate_app, name="translate")
 app.add_typer(review_app, name="review")
 app.add_typer(repair_app, name="repair")
 app.add_typer(export_app, name="export")
+app.add_typer(manifest_app, name="manifest")
 console = Console()
 
 
@@ -57,6 +60,21 @@ def _client(
         temperature=temperature,
         max_tokens=max_tokens,
     )
+
+
+def _parse_key_value_options(values: list[str] | None, option_name: str) -> dict[str, str]:
+    parsed: dict[str, str] = {}
+    for value in values or []:
+        if "=" not in value:
+            console.print(f"[red]{option_name} must use key=value syntax:[/red] {value}")
+            raise typer.Exit(code=1)
+        key, raw = value.split("=", 1)
+        key = key.strip()
+        if not key:
+            console.print(f"[red]{option_name} has an empty key:[/red] {value}")
+            raise typer.Exit(code=1)
+        parsed[key] = raw.strip()
+    return parsed
 
 
 @app.command()
@@ -156,6 +174,47 @@ def export_egeyuma(
     )
     write_jsonl(output, exported)
     console.print(f"[green]Wrote[/green] {output} ({len(exported)} items)")
+
+
+@manifest_app.command("create")
+def create_run_manifest(
+    output: Annotated[Path, typer.Option(help="Manifest JSON output path.")],
+    run_id: Annotated[str | None, typer.Option(help="Optional explicit run id.")] = None,
+    source_file: Annotated[
+        list[Path] | None,
+        typer.Option("--source-file", help="Source file to hash. Repeatable."),
+    ] = None,
+    output_file: Annotated[
+        list[Path] | None,
+        typer.Option("--output-file", help="Output file to hash. Repeatable."),
+    ] = None,
+    prompt_file: Annotated[
+        list[Path] | None,
+        typer.Option("--prompt-file", help="Prompt file to hash. Repeatable."),
+    ] = None,
+    model: Annotated[
+        list[str] | None,
+        typer.Option("--model", help="Model metadata as role=name. Repeatable."),
+    ] = None,
+    parameter: Annotated[
+        list[str] | None,
+        typer.Option("--parameter", help="Run parameter as key=value. Repeatable."),
+    ] = None,
+    notes: Annotated[str, typer.Option(help="Free-text notes for the run.")] = "",
+) -> None:
+    """Create a JSON manifest with SHA256 provenance for a run."""
+
+    manifest = create_manifest(
+        run_id=run_id or default_run_id("bhashanthara"),
+        source_files=source_file or [],
+        output_files=output_file or [],
+        prompt_files=prompt_file or [],
+        models=_parse_key_value_options(model, "--model"),
+        parameters=_parse_key_value_options(parameter, "--parameter"),
+        notes=notes,
+    )
+    write_json(output, manifest.as_dict())
+    console.print(f"[green]Wrote[/green] {output}")
 
 
 @translate_app.command("validate")
