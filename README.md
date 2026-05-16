@@ -1,18 +1,28 @@
-# ඇගැයුම භාෂාන්තර
+# ඇගැයුම භාෂාන්තර - Egeyuma Bhashanthara
 
-**භාෂාන්තර** is a local LLM-assisted translation and verification pipeline for creating Sinhala benchmark datasets from English multiple-choice question datasets.
-It is designed to work alongside [Egeyuma](https://github.com/DishanRajapaksha/egeyuma), which evaluates Sinhala, Singlish, and Sri Lankan-context LLMs.
-## Purpose
-Egeyuma Bhashanthara turns English MCQ datasets into verified Sinhala benchmark candidates.
-The pipeline is not only translation. It also checks whether the translated question still preserves:
-- the original meaning
-- the original answer key
-- the distinction between answer options
-- natural Sinhala wording
-- domain terminology
-The goal is to produce Sinhala benchmark datasets that can be fed into Egeyuma for evaluation.
+**Egeyuma Bhashanthara** is a local-first translation and verification pipeline for building Sinhala benchmark datasets from English multiple-choice question datasets.
+
+It is designed to work with [Egeyuma](https://github.com/DishanRajapaksha/egeyuma), the evaluation engine and benchmark dashboard for Sinhala, Singlish, and Sri Lankan-context LLMs.
+
 ```text
-English MCQ dataset
+egeyuma-bhashanthara  -> creates translated and verified Sinhala datasets
+egeyuma               -> evaluates models using those datasets
+```
+
+## Why this exists
+
+Machine-translated benchmarks are dangerous if they are treated as finished datasets.
+
+A translated question can sound fluent while quietly changing the correct answer. A distractor can become correct. Two options can collapse into the same Sinhala phrase. A technical term can be softened into nonsense. At that point, the benchmark is no longer measuring model reasoning. It is measuring translation damage.
+
+Bhashanthara exists to detect that damage before translated data is used for evaluation.
+
+## Core idea
+
+Bhashanthara turns English MCQ datasets into Sinhala benchmark candidates through a staged pipeline:
+
+```text
+English MCQ JSONL
   -> local LLM translation
   -> automatic structural checks
   -> Sinhala quality review
@@ -20,32 +30,52 @@ English MCQ dataset
   -> optional back-translation audit
   -> Bronze / Silver / Gold Sinhala JSONL
   -> Egeyuma evaluation
+```
 
-Why this exists
+The project is local-first. It should work with local model servers such as LM Studio, Ollama, and llama.cpp server. Cloud APIs may be supported, but should not be required for the core workflow.
 
-Machine-translated benchmarks are risky.
+## What Bhashanthara checks
 
-A translation can sound fluent while quietly changing the correct answer. For example, an option like “carbon dioxide” may become “carbon”, or two distractors may collapse into the same Sinhala phrase. At that point the benchmark is no longer measuring model reasoning. It is measuring translation damage.
+The pipeline should verify that the translated item preserves:
 
-Bhashanthara exists to make that damage visible before the dataset is used.
+- the original meaning
+- the original answer key
+- the distinction between answer options
+- natural Sinhala wording
+- domain terminology
+- dataset provenance and licence metadata
 
-Relationship with Egeyuma
+The most important rule:
+
+> A single answer-preservation failure must block the item from becoming a trusted benchmark item.
+
+## Relationship with Egeyuma
+
+Bhashanthara and Egeyuma are separate on purpose.
+
+```text
+egeyuma-bhashanthara
+  translation
+  verification
+  review
+  dataset generation
 
 egeyuma
-  Evaluation engine, benchmark dashboard, result reporting
-egeyuma-bhashanthara
-  Translation, verification, review, and Sinhala dataset generation
+  evaluation
+  scoring
+  reporting
+  benchmark dashboard
+```
 
-Bhashanthara creates benchmark datasets. Egeyuma evaluates models against them.
+Translation is a data-generation pipeline. Evaluation should remain deterministic. Mixing the two would make benchmark runs slippery and hard to reproduce.
 
-The evaluator should stay deterministic and cold. Translation is a separate pipeline with its own provenance, review metadata, and quality gates.
+## Dataset format
 
-Dataset flow
+### Input
 
-Input
+Bhashanthara starts with canonical English MCQ JSONL.
 
-Bhashanthara starts with canonical MCQ JSONL.
-
+```json
 {
   "id": "mmlu_biology_001",
   "task_type": "mcq",
@@ -63,15 +93,18 @@ Bhashanthara starts with canonical MCQ JSONL.
   "language_style": "formal_english",
   "source": "cais/mmlu",
   "metadata": {
-    "license": "MIT",
+    "source_dataset": "cais/mmlu",
+    "source_license": "MIT",
     "original_language": "en"
   }
 }
+```
 
-Output
+### Output
 
-The translated item keeps the original answer index and records translation metadata.
+The Sinhala item keeps the original answer index and records translation metadata.
 
+```json
 {
   "id": "mmlu_biology_001_si",
   "task_type": "mcq",
@@ -90,6 +123,8 @@ The translated item keeps the original answer index and records translation meta
   "source": "translated_from:cais/mmlu",
   "metadata": {
     "original_id": "mmlu_biology_001",
+    "source_dataset": "cais/mmlu",
+    "source_license": "MIT",
     "translation": {
       "source_language": "en",
       "target_language": "si",
@@ -120,50 +155,82 @@ The translated item keeps the original answer index and records translation meta
     }
   }
 }
+```
 
-Quality tiers
+## Quality tiers
 
-Bhashanthara separates translated data into quality tiers.
+Bhashanthara separates translated data into explicit trust levels.
 
+```text
 Bronze
   Machine translated
   Automatic structural checks passed
+
 Silver
   Bronze
   LLM verifier accepted Sinhala quality and answer preservation
+
 Gold
   Silver
   Human reviewed or adjudicated
+```
 
-Only Gold should be used for serious leaderboard claims. Bronze and Silver are useful for development, smoke tests, and triage.
+Bronze and Silver are useful for development. Gold is the only tier that should be used for serious leaderboard claims.
 
-Planned CLI
+## Model roles
 
-Generate translations
+The pipeline should use different models where possible.
 
+```text
+Translator model
+  Translates English MCQs into Sinhala.
+
+Sinhala reviewer model
+  Checks fluency, grammar, exam-style Sinhala, and terminology.
+
+Answer-preservation reviewer model
+  Compares the English original and Sinhala translation, then decides whether the same answer remains correct.
+
+Back-translator model, optional
+  Translates Sinhala back into English to help detect meaning drift.
+```
+
+Using the same model to translate and verify is acceptable for experiments, but weak. The translator should not be the only judge of its own work.
+
+## Planned CLI
+
+### Generate translations
+
+```bash
 bhashanthara translate generate \
   --input data/mmlu-en.jsonl \
   --output data/mmlu-si-bronze.jsonl \
   --model lmstudio/qwen3-14b \
   --base-url http://localhost:1234/v1
+```
 
-Validate translated data
+### Validate translated data
 
+```bash
 bhashanthara translate validate \
   --input data/mmlu-si-bronze.jsonl \
   --output audits/mmlu-si-checks.jsonl
+```
 
-Verify with separate models
+### Verify with separate models
 
+```bash
 bhashanthara translate verify \
   --input data/mmlu-si-bronze.jsonl \
   --output data/mmlu-si-silver.jsonl \
   --sinhala-reviewer lmstudio/gemma-3-12b \
   --answer-reviewer lmstudio/qwen3-32b \
   --base-url http://localhost:1234/v1
+```
 
-Run the full local pipeline
+### Run the full pipeline
 
+```bash
 bhashanthara translate pipeline \
   --input data/mmlu-en.jsonl \
   --output data/mmlu-si-silver.jsonl \
@@ -172,49 +239,55 @@ bhashanthara translate pipeline \
   --answer-reviewer lmstudio/qwen3-32b \
   --base-url http://localhost:1234/v1 \
   --limit 200
+```
 
-Model roles
+### Export suspicious items for human review
 
-The pipeline should use different models where possible.
+```bash
+bhashanthara review export-labelstudio \
+  --input data/mmlu-si-silver-candidates.jsonl \
+  --output review/labelstudio_tasks.json
+```
 
-Translator model
-  Translates English MCQ into Sinhala.
-Sinhala reviewer model
-  Checks fluency, naturalness, grammar, exam-style Sinhala, and terminology.
-Answer-preservation reviewer model
-  Compares English original and Sinhala translation, then decides whether the same answer remains correct.
-Back-translator model, optional
-  Translates Sinhala back to English to help detect meaning drift.
+### Import human review decisions
 
-Using the same model to translate and verify is allowed for experiments, but weaker. That is a kangaroo court with tensor cores.
+```bash
+bhashanthara review import-labelstudio \
+  --input data/mmlu-si-silver-candidates.jsonl \
+  --labels review/labelstudio_export.json \
+  --output data/mmlu-si-gold.jsonl
+```
 
-Automatic checks
+## Automatic checks
 
 Before spending model time on review, Bhashanthara should run cheap structural checks.
 
 Examples:
 
-* same number of choices
-* answer index unchanged
-* no empty question or choice
-* no duplicate translated choices
-* Sinhala character ratio above a threshold
-* no unexpected English leftovers
-* valid JSON output from the translator
-* translated choices are not absurdly short or long
-* model did not include explanations outside JSON
+- same number of choices
+- answer index unchanged
+- no empty question or choice
+- no duplicate translated choices
+- Sinhala character ratio above a threshold
+- no unexpected English leftovers
+- valid JSON output from the translator
+- translated choices are not absurdly short or long
+- model did not include explanations outside JSON
 
-Verification decisions
+## Verification decisions
 
 Verifier output should use strict decisions.
 
+```text
 accept
 repair
 reject
 needs_human_review
+```
 
 Failure reasons should be explicit.
 
+```text
 answer_changed
 meaning_changed
 ambiguous_question
@@ -223,47 +296,43 @@ bad_sinhala
 domain_term_error
 formatting_error
 json_error
+```
 
-A single answer-preservation failure should block the item from Silver or Gold.
+## Human review
 
-Human review
-
-Bhashanthara should support exporting suspicious items to a local review tool such as Label Studio.
+Bhashanthara should support human review for suspicious items.
 
 Suspicious items include:
 
-* automatic checks failed
-* Sinhala reviewer rejected or requested repair
-* answer-preservation reviewer rejected
-* back-translation drift is high
-* English model answers original correctly but Sinhala model fails translated version
-* all models choose the same wrong Sinhala option
+- automatic checks failed
+- Sinhala reviewer rejected or requested repair
+- answer-preservation reviewer rejected
+- back-translation drift is high
+- English model answers the original correctly but Sinhala model fails the translation
+- all models choose the same wrong Sinhala option
 
-Future command shape:
+A local review tool such as Label Studio can be used as the audit interface.
 
-bhashanthara review export-labelstudio \
-  --input data/mmlu-si-silver-candidates.jsonl \
-  --output review/labelstudio_tasks.json
-bhashanthara review import-labelstudio \
-  --input data/mmlu-si-silver-candidates.jsonl \
-  --labels review/labelstudio_export.json \
-  --output data/mmlu-si-gold.jsonl
+## Suggested package structure
 
-Suggested package structure
-
+```text
 egeyuma-bhashanthara/
   README.md
   pyproject.toml
+
   src/
     bhashanthara/
       __init__.py
       cli.py
+
       datasets/
         schema.py
         jsonl.py
+
       models/
         openai_compatible.py
         ollama.py
+
       translate/
         generate.py
         checks.py
@@ -271,59 +340,56 @@ egeyuma-bhashanthara/
         backtranslate.py
         decide.py
         pipeline.py
+
         prompts/
           translate_mcq_si_v1.txt
           review_sinhala_quality_v1.txt
           review_answer_preservation_v1.txt
           backtranslate_v1.txt
+
       review/
         labelstudio.py
+
       reports/
         stats.py
+
   tests/
     test_schema.py
     test_checks.py
     test_generate.py
     test_verify.py
     test_pipeline.py
+```
 
-Local-first design
-
-Bhashanthara should work with local model servers first.
-
-Supported target backends:
-
-* LM Studio OpenAI-compatible API
-* Ollama
-* llama.cpp server
-* OpenAI-compatible endpoints
-
-The project should not require cloud APIs for the core workflow.
-
-First milestone
+## First milestone
 
 Build a small, defensible pilot.
 
-Input:
+```text
+Input
   200 English MCQs from an open dataset
-Pipeline:
+
+Pipeline
   local LLM translation
   automatic checks
   two-model verification
   suspicious item export
-Output:
+
+Output
   mmlu-si-bronze.jsonl
   mmlu-si-silver.jsonl
   audit report
+```
 
-Do not begin with 10,000 questions. That is how one manufactures a JSON landfill with a Sinhala label.
+Do not begin with 10,000 questions. That is how you manufacture a JSON landfill with a Sinhala label.
 
-Licence note
+## Licence note
 
 Translated datasets are derivative works. The original dataset licence still matters.
 
 Every generated item must preserve source metadata:
 
+```json
 {
   "metadata": {
     "source_dataset": "cais/mmlu",
@@ -331,5 +397,6 @@ Every generated item must preserve source metadata:
     "original_id": "..."
   }
 }
+```
 
 Avoid publishing translated datasets when the original licence is unclear.
