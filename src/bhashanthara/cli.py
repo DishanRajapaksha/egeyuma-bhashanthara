@@ -134,7 +134,10 @@ def export_egeyuma(
     input: Annotated[Path, typer.Option(help="Translated Sinhala JSONL input.")],
     output: Annotated[Path, typer.Option(help="Egeyuma-compatible MCQ JSONL output.")],
     dataset_name: Annotated[str, typer.Option(help="Dataset name to write into exported items.")],
-    min_status: Annotated[ExportStatus, typer.Option(help="Minimum translation status to export.")] = "gold",
+    min_status: Annotated[
+        ExportStatus,
+        typer.Option(help="Minimum translation status to export."),
+    ] = "gold",
     language: Annotated[str, typer.Option(help="Exported language code.")] = "si",
 ) -> None:
     """Export translated items into Egeyuma-compatible MCQ JSONL."""
