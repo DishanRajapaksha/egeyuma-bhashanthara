@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from bhashanthara.datasets.schema import TranslationCandidate, TranslatedMCQItem
+from bhashanthara.datasets.schema import TranslatedMCQItem, TranslationCandidate
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
 from bhashanthara.translate.generate import load_prompt
 from bhashanthara.translate.json_utils import extract_json_object
