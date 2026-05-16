@@ -19,6 +19,8 @@ This repository now contains the first Python scaffold using `uv`:
 - prompt templates for translation and verification
 - automatic translation checks
 - Bronze/Silver decision logic
+- Label Studio export/import for human audit
+- translation statistics reporting
 - `bhashanthara` Typer CLI
 - sample English MCQ JSONL data
 - pytest tests
@@ -65,6 +67,40 @@ uv run bhashanthara translate pipeline \
   --api-key local-key \
   --limit 2
 ```
+
+## Inspect translation stats
+
+```bash
+uv run bhashanthara stats \
+  --input data/generated/mmlu-si-silver.jsonl \
+  --output audits/mmlu-si-stats.json
+```
+
+## Export suspicious items for Label Studio
+
+By default, this exports only suspicious items.
+
+```bash
+uv run bhashanthara review export-labelstudio \
+  --input data/generated/mmlu-si-silver.jsonl \
+  --output review/labelstudio_tasks.json \
+  --label-config-output review/labelstudio_config.xml
+```
+
+Use `--include-all` when you want a full audit batch.
+
+## Import Label Studio decisions
+
+After reviewing tasks in Label Studio, export the annotated task JSON and merge it back into the translated JSONL.
+
+```bash
+uv run bhashanthara review import-labelstudio \
+  --input data/generated/mmlu-si-silver.jsonl \
+  --labels review/labelstudio_export.json \
+  --output data/generated/mmlu-si-gold-candidates.jsonl
+```
+
+Human `accept` marks an item as `gold`; human `reject` marks it as `rejected`; `repair` and `needs_human_review` keep the item in `needs_human_review`.
 
 ## Development
 
@@ -216,6 +252,11 @@ The Sinhala item keeps the original answer index and records translation metadat
           "answer_preserved": true,
           "notes": ""
         }
+      },
+      "human_review": {
+        "decision": "accept",
+        "failure_reasons": [],
+        "notes": "Looks correct."
       }
     }
   }
@@ -304,7 +345,7 @@ json_error
 
 ## Human review
 
-Bhashanthara should support human review for suspicious items.
+Bhashanthara supports human review for suspicious items through Label Studio export/import.
 
 Suspicious items include:
 
@@ -314,78 +355,6 @@ Suspicious items include:
 - back-translation drift is high
 - English model answers the original correctly but Sinhala model fails the translation
 - all models choose the same wrong Sinhala option
-
-A local review tool such as Label Studio can be used as the audit interface.
-
-## Suggested package structure
-
-```text
-egeyuma-bhashanthara/
-  README.md
-  pyproject.toml
-
-  src/
-    bhashanthara/
-      __init__.py
-      cli.py
-
-      datasets/
-        schema.py
-        jsonl.py
-
-      models/
-        openai_compatible.py
-        ollama.py
-
-      translate/
-        generate.py
-        checks.py
-        verify.py
-        backtranslate.py
-        decide.py
-        pipeline.py
-
-        prompts/
-          translate_mcq_si_v1.txt
-          review_sinhala_quality_v1.txt
-          review_answer_preservation_v1.txt
-          backtranslate_v1.txt
-
-      review/
-        labelstudio.py
-
-      reports/
-        stats.py
-
-  tests/
-    test_schema.py
-    test_checks.py
-    test_generate.py
-    test_verify.py
-    test_pipeline.py
-```
-
-## First milestone
-
-Build a small, defensible pilot.
-
-```text
-Input
-  200 English MCQs from an open dataset
-
-Pipeline
-  local LLM translation
-  automatic checks
-  two-model verification
-  suspicious item export
-
-Output
-  mmlu-si-bronze.jsonl
-  mmlu-si-silver.jsonl
-  audit report
-```
-
-Do not begin with 10,000 questions. That is how you manufacture a JSON landfill with a Sinhala label.
 
 ## Licence note
 
