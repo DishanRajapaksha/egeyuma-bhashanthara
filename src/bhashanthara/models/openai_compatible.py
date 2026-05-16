@@ -46,7 +46,9 @@ class OpenAICompatibleClient:
         try:
             content = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as exc:
-            raise ModelClientError(f"Unexpected model response shape for {self.model}: {data}") from exc
+            raise ModelClientError(
+                f"Unexpected model response shape for {self.model}: {data}"
+            ) from exc
 
         if not isinstance(content, str) or not content.strip():
             raise ModelClientError(f"Empty model response for {self.model}")
