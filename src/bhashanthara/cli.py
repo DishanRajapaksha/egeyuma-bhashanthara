@@ -6,7 +6,12 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
-from bhashanthara.datasets.jsonl import DatasetError, load_mcq_jsonl, load_translated_jsonl, write_jsonl
+from bhashanthara.datasets.jsonl import (
+    DatasetError,
+    load_mcq_jsonl,
+    load_translated_jsonl,
+    write_jsonl,
+)
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
 from bhashanthara.translate.pipeline import translate_many, translate_verify_item
 
@@ -64,7 +69,10 @@ def generate(
     input: Annotated[Path, typer.Option(help="Canonical English MCQ JSONL input.")],
     output: Annotated[Path, typer.Option(help="Translated Sinhala JSONL output.")],
     model: Annotated[str, typer.Option(help="Local/OpenAI-compatible translator model name.")],
-    base_url: Annotated[str, typer.Option(help="OpenAI-compatible base URL.")] = "http://localhost:1234/v1",
+    base_url: Annotated[
+        str,
+        typer.Option(help="OpenAI-compatible base URL."),
+    ] = "http://localhost:1234/v1",
     api_key: Annotated[str, typer.Option(help="API key for the endpoint.")] = "local-key",
     temperature: Annotated[float, typer.Option(help="Sampling temperature.")] = 0.0,
     max_tokens: Annotated[int, typer.Option(help="Maximum generated tokens.")] = 2048,
@@ -95,9 +103,18 @@ def pipeline(
     input: Annotated[Path, typer.Option(help="Canonical English MCQ JSONL input.")],
     output: Annotated[Path, typer.Option(help="Verified Sinhala JSONL output.")],
     translator: Annotated[str, typer.Option(help="Translator model name.")],
-    sinhala_reviewer: Annotated[str | None, typer.Option(help="Optional Sinhala quality reviewer model.")] = None,
-    answer_reviewer: Annotated[str | None, typer.Option(help="Optional answer-preservation reviewer model.")] = None,
-    base_url: Annotated[str, typer.Option(help="OpenAI-compatible base URL.")] = "http://localhost:1234/v1",
+    sinhala_reviewer: Annotated[
+        str | None,
+        typer.Option(help="Optional Sinhala quality reviewer model."),
+    ] = None,
+    answer_reviewer: Annotated[
+        str | None,
+        typer.Option(help="Optional answer-preservation reviewer model."),
+    ] = None,
+    base_url: Annotated[
+        str,
+        typer.Option(help="OpenAI-compatible base URL."),
+    ] = "http://localhost:1234/v1",
     api_key: Annotated[str, typer.Option(help="API key for the endpoint.")] = "local-key",
     temperature: Annotated[float, typer.Option(help="Sampling temperature.")] = 0.0,
     max_tokens: Annotated[int, typer.Option(help="Maximum generated tokens.")] = 2048,
