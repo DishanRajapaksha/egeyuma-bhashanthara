@@ -22,13 +22,7 @@ class PipelineFailure:
     item: dict[str, Any]
 
     def as_dict(self) -> dict[str, Any]:
-        return {
-            "original_id": self.original_id,
-            "stage": self.stage,
-            "error_type": self.error_type,
-            "error_message": self.error_message,
-            "item": self.item,
-        }
+        return self.__dict__.copy()
 
 
 @dataclass(frozen=True)
@@ -54,7 +48,11 @@ def completed_original_ids(output_path: Path) -> set[str]:
     return {original_id_from_translated(item) for item in load_translated_jsonl(output_path)}
 
 
-def failure_from_exception(item: MCQItem, exc: Exception, stage: str = "pipeline") -> PipelineFailure:
+def failure_from_exception(
+    item: MCQItem,
+    exc: Exception,
+    stage: str = "pipeline",
+) -> PipelineFailure:
     return PipelineFailure(
         original_id=item.id,
         stage=stage,
@@ -72,7 +70,7 @@ def run_with_retries(
     max_retries: int,
 ) -> TranslatedMCQItem:
     last_error: Exception | None = None
-    for _attempt in range(max_retries + 1):
+    for _ in range(max_retries + 1):
         try:
             return translate_verify_item(
                 item,
@@ -80,9 +78,9 @@ def run_with_retries(
                 sinhala_reviewer=sinhala_reviewer,
                 answer_reviewer=answer_reviewer,
             )
-        except Exception as exc:  # pragma: no cover - concrete failures come from providers.
+        except Exception as exc:  # pragma: no cover
             last_error = exc
-    if last_error is None:  # pragma: no cover - defensive guard.
+    if last_error is None:  # pragma: no cover
         raise RuntimeError("translation failed without an exception")
     raise last_error
 
@@ -101,12 +99,9 @@ def run_resumable_pipeline(
     limit: int | None = None,
     progress: ProgressCallback | None = None,
 ) -> PipelineRunSummary:
-    selected_items = items[:limit] if limit is not None else items
-
-    if resume:
-        completed_ids = completed_original_ids(output_path)
-    else:
-        completed_ids = set()
+    selected = items[:limit] if limit is not None else items
+    completed = completed_original_ids(output_path) if resume else set()
+    if not resume:
         write_jsonl(output_path, [])
         if failures_output is not None:
             write_jsonl(failures_output, [])
@@ -115,15 +110,15 @@ def run_resumable_pipeline(
     translated_count = 0
     failed = 0
 
-    for index, item in enumerate(selected_items, start=1):
-        if item.id in completed_ids:
+    for index, item in enumerate(selected, start=1):
+        if item.id in completed:
             skipped += 1
             if progress is not None:
-                progress(f"Skipping {index}/{len(selected_items)}: {item.id}")
+                progress(f"Skipping {index}/{len(selected)}: {item.id}")
             continue
 
         if progress is not None:
-            progress(f"Translating {index}/{len(selected_items)}: {item.id}")
+            progress(f"Translating {index}/{len(selected)}: {item.id}")
 
         try:
             translated = run_with_retries(
@@ -135,8 +130,8 @@ def run_resumable_pipeline(
             )
         except Exception as exc:
             failed += 1
-            failure = failure_from_exception(item, exc)
             if failures_output is not None:
+                failure = failure_from_exception(item, exc)
                 append_jsonl(failures_output, [failure.as_dict()])
             if not continue_on_error:
                 raise
@@ -145,9 +140,4 @@ def run_resumable_pipeline(
         append_jsonl(output_path, [translated.model_dump()])
         translated_count += 1
 
-    return PipelineRunSummary(
-        considered=len(selected_items),
-        skipped=skipped,
-        translated=translated_count,
-        failed=failed,
-    )
+    return PipelineRunSummary(len(selected), skipped, translated_count, failed)
