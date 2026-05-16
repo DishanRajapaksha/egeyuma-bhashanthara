@@ -8,6 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from bhashanthara.datasets.conversion.arc import ARCConversionError, convert_arc_jsonl
 from bhashanthara.datasets.conversion.mmlu import MMLUConversionError, convert_mmlu_csv
 from bhashanthara.datasets.jsonl import (
     DatasetError,
@@ -117,6 +118,40 @@ def stats(
     if output is not None:
         write_json(output, report.as_dict())
         console.print(f"[green]Wrote[/green] {output}")
+
+
+@datasets_app.command("convert-arc")
+def convert_arc(
+    input: Annotated[Path, typer.Option(help="ARC JSONL input file.")],
+    output: Annotated[Path, typer.Option(help="Canonical MCQ JSONL output.")],
+    subject: Annotated[str, typer.Option(help="ARC subject or split name.")],
+    domain: Annotated[str | None, typer.Option(help="Optional broad domain.")] = None,
+    source: Annotated[str, typer.Option(help="Source dataset name.")] = "ai2_arc",
+    source_license: Annotated[str, typer.Option(help="Source dataset licence.")] = "cc-by-sa-4.0",
+    id_prefix: Annotated[str | None, typer.Option(help="Optional item ID prefix.")] = None,
+    allow_variable_choices: Annotated[
+        bool,
+        typer.Option(help="Allow non-4-choice ARC rows."),
+    ] = False,
+) -> None:
+    """Convert an ARC JSONL file into canonical MCQ JSONL."""
+
+    try:
+        items = convert_arc_jsonl(
+            input,
+            subject=subject,
+            domain=domain,
+            source=source,
+            source_license=source_license,
+            id_prefix=id_prefix,
+            require_four_choices=not allow_variable_choices,
+        )
+    except (ARCConversionError, DatasetError) as exc:
+        console.print(f"[red]Invalid ARC JSONL:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    write_jsonl(output, (item.model_dump() for item in items))
+    console.print(f"[green]Wrote[/green] {output} ({len(items)} items)")
 
 
 @datasets_app.command("convert-mmlu")
