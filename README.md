@@ -9,6 +9,71 @@ egeyuma-bhashanthara  -> creates translated and verified Sinhala datasets
 egeyuma               -> evaluates models using those datasets
 ```
 
+## Current scaffold
+
+This repository now contains the first Python scaffold using `uv`:
+
+- canonical MCQ JSONL schema
+- translated MCQ schema with translation metadata
+- OpenAI-compatible local model client
+- prompt templates for translation and verification
+- automatic translation checks
+- Bronze/Silver decision logic
+- `bhashanthara` Typer CLI
+- sample English MCQ JSONL data
+- pytest tests
+- GitHub Actions CI using `uv`
+
+## Install
+
+```bash
+uv sync --dev
+```
+
+## Validate the sample dataset
+
+```bash
+uv run bhashanthara validate data/samples/mmlu_biology_sample.jsonl
+```
+
+## Generate Bronze translations
+
+Start a local OpenAI-compatible server first, for example LM Studio on `http://localhost:1234/v1`.
+
+```bash
+uv run bhashanthara translate generate \
+  --input data/samples/mmlu_biology_sample.jsonl \
+  --output data/generated/mmlu-si-bronze.jsonl \
+  --model qwen3-14b \
+  --base-url http://localhost:1234/v1 \
+  --api-key local-key \
+  --limit 2
+```
+
+## Run the full local pipeline
+
+Use one model for translation and optional separate models for review.
+
+```bash
+uv run bhashanthara translate pipeline \
+  --input data/samples/mmlu_biology_sample.jsonl \
+  --output data/generated/mmlu-si-silver.jsonl \
+  --translator qwen3-14b \
+  --sinhala-reviewer gemma-3-12b \
+  --answer-reviewer qwen3-32b \
+  --base-url http://localhost:1234/v1 \
+  --api-key local-key \
+  --limit 2
+```
+
+## Development
+
+```bash
+uv run ruff check .
+uv run mypy src tests
+uv run pytest
+```
+
 ## Why this exists
 
 Machine-translated benchmarks are dangerous if they are treated as finished datasets.
@@ -196,67 +261,6 @@ Back-translator model, optional
 ```
 
 Using the same model to translate and verify is acceptable for experiments, but weak. The translator should not be the only judge of its own work.
-
-## Planned CLI
-
-### Generate translations
-
-```bash
-bhashanthara translate generate \
-  --input data/mmlu-en.jsonl \
-  --output data/mmlu-si-bronze.jsonl \
-  --model lmstudio/qwen3-14b \
-  --base-url http://localhost:1234/v1
-```
-
-### Validate translated data
-
-```bash
-bhashanthara translate validate \
-  --input data/mmlu-si-bronze.jsonl \
-  --output audits/mmlu-si-checks.jsonl
-```
-
-### Verify with separate models
-
-```bash
-bhashanthara translate verify \
-  --input data/mmlu-si-bronze.jsonl \
-  --output data/mmlu-si-silver.jsonl \
-  --sinhala-reviewer lmstudio/gemma-3-12b \
-  --answer-reviewer lmstudio/qwen3-32b \
-  --base-url http://localhost:1234/v1
-```
-
-### Run the full pipeline
-
-```bash
-bhashanthara translate pipeline \
-  --input data/mmlu-en.jsonl \
-  --output data/mmlu-si-silver.jsonl \
-  --translator lmstudio/qwen3-14b \
-  --sinhala-reviewer lmstudio/gemma-3-12b \
-  --answer-reviewer lmstudio/qwen3-32b \
-  --base-url http://localhost:1234/v1 \
-  --limit 200
-```
-
-### Export suspicious items for human review
-
-```bash
-bhashanthara review export-labelstudio \
-  --input data/mmlu-si-silver-candidates.jsonl \
-  --output review/labelstudio_tasks.json
-```
-
-### Import human review decisions
-
-```bash
-bhashanthara review import-labelstudio \
-  --input data/mmlu-si-silver-candidates.jsonl \
-  --labels review/labelstudio_export.json \
-  --output data/mmlu-si-gold.jsonl
-```
 
 ## Automatic checks
 
