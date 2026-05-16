@@ -6,8 +6,9 @@ Repair Sinhala grammar, spelling, word usage, sentence flow, and exam-style phra
 Improve awkward literal translations, unnatural word order, and inconsistent terminology.
 Keep technical terms accurate using Sinhala wording.
 Prefer standard biology/exam Sinhala over literal translations.
-When the English meaning is heredity, fitness, or reproductive success, use precise biology phrasing such as genes being passed/transmitted to the next generation rather than vague wording like "genetic information is taken forward".
+Use precise biology phrasing such as genes being passed/transmitted to the next generation rather than vague wording like "genetic information is taken forward".
 Use concise, natural phrasing that a Sinhala-medium biology student would expect in an exam question.
+Use natural Sinhala question endings. For example, prefer "උදාහරණයක්ද?" over the declarative "උදාහරණයකි?" when asking "is an example of which type?"
 Do not add English technical terms, English glosses, or parenthesized English translations.
 Preserve English text only when it already appears in the Sinhala input and is necessary.
 Do not change the answer index.
