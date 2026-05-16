@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -20,6 +20,7 @@ from bhashanthara.datasets.jsonl import (
 from bhashanthara.export.egeyuma import ExportStatus, export_egeyuma_items
 from bhashanthara.manifest.provenance import create_manifest, default_run_id
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
+from bhashanthara.pilot.sample import select_pilot_items
 from bhashanthara.repair.patches import RepairError, apply_repair_records, export_repair_items
 from bhashanthara.reports.stats import collect_translation_stats
 from bhashanthara.review.labelstudio import (
@@ -38,13 +39,16 @@ review_app = typer.Typer(help="Export and import human review tasks.")
 repair_app = typer.Typer(help="Export and apply repaired translations.")
 export_app = typer.Typer(help="Export datasets for downstream evaluation tools.")
 manifest_app = typer.Typer(help="Create run manifests and provenance records.")
+pilot_app = typer.Typer(help="Create small pilot datasets.")
 app.add_typer(datasets_app, name="datasets")
 app.add_typer(translate_app, name="translate")
 app.add_typer(review_app, name="review")
 app.add_typer(repair_app, name="repair")
 app.add_typer(export_app, name="export")
 app.add_typer(manifest_app, name="manifest")
+app.add_typer(pilot_app, name="pilot")
 console = Console()
+PROMPT_DIR = Path(__file__).resolve().parent / "translate" / "prompts"
 
 
 def _client(
@@ -77,6 +81,45 @@ def _parse_key_value_options(values: list[str] | None, option_name: str) -> dict
             raise typer.Exit(code=1)
         parsed[key] = raw.strip()
     return parsed
+
+
+def _write_auto_manifest(
+    *,
+    output: Path | None,
+    run_id: str,
+    source_files: list[Path],
+    output_files: list[Path],
+    prompt_files: list[Path] | None = None,
+    models: dict[str, str] | None = None,
+    parameters: dict[str, Any] | None = None,
+    notes: str = "",
+) -> None:
+    if output is None:
+        return
+    manifest = create_manifest(
+        run_id=run_id,
+        source_files=source_files,
+        output_files=output_files,
+        prompt_files=prompt_files or [],
+        models=models or {},
+        parameters=parameters or {},
+        notes=notes,
+    )
+    write_json(output, manifest.as_dict())
+    console.print(f"[green]Wrote manifest[/green] {output}")
+
+
+def _pipeline_prompt_files(
+    *,
+    include_sinhala_review: bool,
+    include_answer_review: bool,
+) -> list[Path]:
+    prompts = [PROMPT_DIR / "translate_mcq_si_v1.txt"]
+    if include_sinhala_review:
+        prompts.append(PROMPT_DIR / "review_sinhala_quality_v1.txt")
+    if include_answer_review:
+        prompts.append(PROMPT_DIR / "review_answer_preservation_v1.txt")
+    return [path for path in prompts if path.exists()]
 
 
 @app.command()
@@ -183,6 +226,41 @@ def convert_mmlu(
     console.print(f"[green]Wrote[/green] {output} ({len(items)} items)")
 
 
+@pilot_app.command("create")
+def create_pilot(
+    input: Annotated[Path, typer.Option(help="Canonical MCQ JSONL input.")],
+    output: Annotated[Path, typer.Option(help="Pilot canonical MCQ JSONL output.")],
+    count: Annotated[int, typer.Option(help="Number of items to select.")] = 50,
+    manifest_output: Annotated[
+        Path | None,
+        typer.Option(help="Optional manifest JSON output."),
+    ] = None,
+    manifest_notes: Annotated[str, typer.Option(help="Optional manifest notes.")] = "",
+) -> None:
+    """Create a small pilot dataset from the first N canonical MCQ items."""
+
+    try:
+        items = load_mcq_jsonl(input)
+        pilot = select_pilot_items(items, count=count)
+    except (DatasetError, ValueError) as exc:
+        console.print(f"[red]Invalid pilot input:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    write_jsonl(output, (item.model_dump() for item in pilot.items))
+    console.print(
+        f"[green]Wrote[/green] {output} "
+        f"({pilot.selected}/{pilot.requested} requested items)"
+    )
+    _write_auto_manifest(
+        output=manifest_output,
+        run_id=default_run_id("pilot"),
+        source_files=[input],
+        output_files=[output],
+        parameters={"count": count},
+        notes=manifest_notes,
+    )
+
+
 @export_app.command("egeyuma")
 def export_egeyuma(
     input: Annotated[Path, typer.Option(help="Translated Sinhala JSONL input.")],
@@ -193,6 +271,11 @@ def export_egeyuma(
         typer.Option(help="Minimum translation status to export."),
     ] = "gold",
     language: Annotated[str, typer.Option(help="Exported language code.")] = "si",
+    manifest_output: Annotated[
+        Path | None,
+        typer.Option(help="Optional manifest JSON output."),
+    ] = None,
+    manifest_notes: Annotated[str, typer.Option(help="Optional manifest notes.")] = "",
 ) -> None:
     """Export translated items into Egeyuma-compatible MCQ JSONL."""
 
@@ -210,6 +293,18 @@ def export_egeyuma(
     )
     write_jsonl(output, exported)
     console.print(f"[green]Wrote[/green] {output} ({len(exported)} items)")
+    _write_auto_manifest(
+        output=manifest_output,
+        run_id=default_run_id("egeyuma_export"),
+        source_files=[input],
+        output_files=[output],
+        parameters={
+            "dataset_name": dataset_name,
+            "min_status": min_status,
+            "language": language,
+        },
+        notes=manifest_notes,
+    )
 
 
 @manifest_app.command("create")
@@ -331,6 +426,11 @@ def pipeline(
         typer.Option(help="Optional JSONL path for failed items."),
     ] = None,
     max_retries: Annotated[int, typer.Option(help="Retries per failed item before giving up.")] = 0,
+    manifest_output: Annotated[
+        Path | None,
+        typer.Option(help="Optional manifest JSON output."),
+    ] = None,
+    manifest_notes: Annotated[str, typer.Option(help="Optional manifest notes.")] = "",
 ) -> None:
     """Run translation plus optional LLM verification."""
 
@@ -394,6 +494,35 @@ def pipeline(
         f"skipped={summary.skipped} "
         f"translated={summary.translated} "
         f"failed={summary.failed}"
+    )
+    _write_auto_manifest(
+        output=manifest_output,
+        run_id=default_run_id("translate_pipeline"),
+        source_files=[input],
+        output_files=[output],
+        prompt_files=_pipeline_prompt_files(
+            include_sinhala_review=sinhala_reviewer is not None,
+            include_answer_review=answer_reviewer is not None,
+        ),
+        models={
+            key: value
+            for key, value in {
+                "translator": translator,
+                "sinhala_reviewer": sinhala_reviewer,
+                "answer_reviewer": answer_reviewer,
+            }.items()
+            if value is not None
+        },
+        parameters={
+            "base_url": base_url,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "limit": limit,
+            "resume": resume,
+            "continue_on_error": continue_on_error,
+            "max_retries": max_retries,
+        },
+        notes=manifest_notes,
     )
 
 
