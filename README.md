@@ -14,6 +14,7 @@ egeyuma               -> evaluates models using those datasets
 This repository now contains the first Python scaffold using `uv`:
 
 - canonical MCQ JSONL schema
+- MMLU CSV to canonical JSONL converter
 - translated MCQ schema with translation metadata
 - OpenAI-compatible local model client
 - prompt templates for translation and verification
@@ -24,7 +25,7 @@ This repository now contains the first Python scaffold using `uv`:
 - repair batch export/apply workflow
 - translation statistics reporting
 - `bhashanthara` Typer CLI
-- sample English MCQ JSONL data
+- sample English MCQ JSONL and MMLU CSV data
 - pytest tests
 - GitHub Actions CI using `uv`
 
@@ -32,6 +33,26 @@ This repository now contains the first Python scaffold using `uv`:
 
 ```bash
 uv sync --dev
+```
+
+## Convert MMLU CSV into canonical MCQ JSONL
+
+MMLU CSV rows are expected in this shape:
+
+```text
+question,A,B,C,D,answer
+```
+
+Example:
+
+```bash
+uv run bhashanthara datasets convert-mmlu \
+  --input data/samples/mmlu_sample.csv \
+  --output data/generated/mmlu-biology.jsonl \
+  --subject high_school_biology \
+  --domain science \
+  --source cais/mmlu \
+  --source-license MIT
 ```
 
 ## Validate the sample dataset
@@ -197,6 +218,7 @@ Bhashanthara and Egeyuma are separate on purpose.
 
 ```text
 egeyuma-bhashanthara
+  dataset conversion
   translation
   verification
   review

@@ -8,6 +8,7 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from bhashanthara.datasets.conversion.mmlu import MMLUConversionError, convert_mmlu_csv
 from bhashanthara.datasets.jsonl import (
     DatasetError,
     load_mcq_jsonl,
@@ -27,9 +28,11 @@ from bhashanthara.translate.backtranslate import add_backtranslations, backtrans
 from bhashanthara.translate.pipeline import translate_many, translate_verify_item
 
 app = typer.Typer(help="Local-first Sinhala benchmark translation and verification pipeline.")
+datasets_app = typer.Typer(help="Convert external datasets into Bhashanthara MCQ JSONL.")
 translate_app = typer.Typer(help="Translate and verify MCQ datasets.")
 review_app = typer.Typer(help="Export and import human review tasks.")
 repair_app = typer.Typer(help="Export and apply repaired translations.")
+app.add_typer(datasets_app, name="datasets")
 app.add_typer(translate_app, name="translate")
 app.add_typer(review_app, name="review")
 app.add_typer(repair_app, name="repair")
@@ -92,6 +95,35 @@ def stats(
     if output is not None:
         write_json(output, report.as_dict())
         console.print(f"[green]Wrote[/green] {output}")
+
+
+@datasets_app.command("convert-mmlu")
+def convert_mmlu(
+    input: Annotated[Path, typer.Option(help="MMLU CSV input: question,A,B,C,D,answer.")],
+    output: Annotated[Path, typer.Option(help="Canonical MCQ JSONL output.")],
+    subject: Annotated[str, typer.Option(help="MMLU subject name.")],
+    domain: Annotated[str | None, typer.Option(help="Optional broad domain.")] = None,
+    source: Annotated[str, typer.Option(help="Source dataset name.")] = "cais/mmlu",
+    source_license: Annotated[str, typer.Option(help="Source dataset licence.")] = "MIT",
+    id_prefix: Annotated[str | None, typer.Option(help="Optional item ID prefix.")] = None,
+) -> None:
+    """Convert an MMLU CSV file into canonical MCQ JSONL."""
+
+    try:
+        items = convert_mmlu_csv(
+            input,
+            subject=subject,
+            domain=domain,
+            source=source,
+            source_license=source_license,
+            id_prefix=id_prefix,
+        )
+    except MMLUConversionError as exc:
+        console.print(f"[red]Invalid MMLU CSV:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    write_jsonl(output, (item.model_dump() for item in items))
+    console.print(f"[green]Wrote[/green] {output} ({len(items)} items)")
 
 
 @translate_app.command("validate")
