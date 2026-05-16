@@ -4,6 +4,25 @@ sidebar_position: 2
 
 # Label Studio and repairs
 
+## Model repair
+
+Use `translate review --repairer` when you want a local model to rewrite grammar, word usage, terminology, and exam-style Sinhala without re-running translation.
+
+```bash
+uv run bhashanthara translate review \
+  --input data/interim/mmlu-biology.jsonl \
+  --translated data/generated/mmlu-biology-si-silver.jsonl \
+  --output data/generated/mmlu-biology-si-repaired.jsonl \
+  --repairer google/gemma-4-31b \
+  --base-url http://localhost:1234/v1 \
+  --max-tokens 4096 \
+  --timeout-seconds 600 \
+  --continue-on-error \
+  --failures-output audits/mmlu-biology-repair-failures.jsonl
+```
+
+The repairer may be combined with `--sinhala-reviewer` and `--answer-reviewer` when you want repair plus model review in one pass. The repair command preserves answer index, answer label, choice order, and choice count.
+
 ## Export suspicious items for Label Studio
 
 By default, this exports only suspicious items.

@@ -16,33 +16,61 @@ npm --prefix docs-site install
 
 ## Common commands
 
+End-to-end local MMLU biology run:
+
 ```bash
 uv run bhashanthara datasets fetch mmlu
 
+mkdir -p data/raw/mmlu-csv
+tar -xf data/raw/mmlu/data.tar -C data/raw/mmlu-csv
+
 uv run bhashanthara datasets convert mmlu \
-  --input data/raw/mmlu/test/high_school_biology_test.csv \
+  --input data/raw/mmlu-csv/data/test/high_school_biology_test.csv \
   --output data/interim/mmlu-biology.jsonl \
   --subject high_school_biology \
   --domain science
 
+uv run bhashanthara validate data/interim/mmlu-biology.jsonl
+
 uv run bhashanthara translate pipeline \
   --input data/interim/mmlu-biology.jsonl \
   --output data/generated/mmlu-biology-si-silver.jsonl \
-  --translator qwen3-14b \
-  --sinhala-reviewer gemma-3-12b \
-  --answer-reviewer qwen3-32b \
+  --translator google/gemma-4-31b \
+  --sinhala-reviewer google/gemma-4-31b \
+  --answer-reviewer google/gemma-4-31b \
   --base-url http://localhost:1234/v1 \
-  --failures-output audits/mmlu-biology-failures.jsonl \
+  --max-tokens 4096 \
+  --timeout-seconds 600 \
+  --resume \
   --continue-on-error \
-  --max-retries 2
+  --max-retries 2 \
+  --failures-output audits/mmlu-biology-pipeline-failures.jsonl
+
+uv run bhashanthara translate review \
+  --input data/interim/mmlu-biology.jsonl \
+  --translated data/generated/mmlu-biology-si-silver.jsonl \
+  --output data/generated/mmlu-biology-si-silver.jsonl \
+  --repairer google/gemma-4-31b \
+  --base-url http://localhost:1234/v1 \
+  --max-tokens 4096 \
+  --timeout-seconds 600 \
+  --continue-on-error \
+  --failures-output audits/mmlu-biology-repair-failures.jsonl
+
+uv run bhashanthara stats \
+  --input data/generated/mmlu-biology-si-silver.jsonl \
+  --output audits/mmlu-biology-si-stats.json
 
 uv run bhashanthara export egeyuma \
   --input data/generated/mmlu-biology-si-silver.jsonl \
   --output data/export/egeyuma-mmlu-biology-si.jsonl \
   --dataset-name sinhala-mmlu-biology \
   --min-status silver \
-  --language si
+  --language si \
+  --manifest-output audits/mmlu-biology-egeyuma-export-manifest.json
 ```
+
+For faster iteration, add `--limit 2` or `--limit 5` to translation or repair commands.
 
 ## Docs
 

@@ -17,6 +17,8 @@ uv run bhashanthara export egeyuma \
 
 `--min-status` accepts `bronze`, `silver`, or `gold`. Use `gold` for serious leaderboard data.
 
+For local pilots, `--min-status silver` is useful after model review. If you are only testing export shape, `--min-status bronze` can export machine-translated items before review.
+
 You can also write a manifest during export.
 
 ```bash
