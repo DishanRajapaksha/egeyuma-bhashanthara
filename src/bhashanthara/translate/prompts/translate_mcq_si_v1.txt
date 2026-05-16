@@ -4,8 +4,13 @@ Rules:
 - Preserve the meaning of the question.
 - Preserve the order and count of choices.
 - Do not change the correct answer.
-- Keep technical terms accurate.
-- Use natural Sinhala suitable for an exam or benchmark.
+- Use natural Sinhala suitable for a Sinhala-medium exam or benchmark.
+- Keep technical terms accurate using Sinhala wording.
+- Prefer standard biology/exam Sinhala over literal translations.
+- Do not add English technical terms, English glosses, or parenthesized English translations unless the English term is normally used as-is in Sinhala.
+- Use precise biology phrasing such as genes being passed/transmitted to the next generation rather than vague wording like "genetic information is taken forward".
+- Use natural Sinhala question endings. For example, prefer "උදාහරණයක්ද?" over the declarative "උදාහරණයකි?" when asking "is an example of which type?"
+- Do not add explanations, hints, or extra facts.
 - Return JSON only. Do not include markdown.
 
 Input JSON:
