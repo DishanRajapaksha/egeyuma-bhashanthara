@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from bhashanthara.datasets.schema import TranslationCandidate, TranslatedMCQItem
+from bhashanthara.datasets.schema import TranslatedMCQItem, TranslationCandidate
 from bhashanthara.translate.backtranslate import attach_backtranslation, backtranslation_report
 
 
