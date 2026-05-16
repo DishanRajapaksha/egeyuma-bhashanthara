@@ -2,10 +2,13 @@ Repair the Sinhala translation of this multiple-choice question.
 
 You must compare the English original and Sinhala translation.
 Correct only the Sinhala question and choices.
+Repair Sinhala grammar, spelling, word usage, sentence flow, and exam-style phrasing.
+Improve awkward literal translations, unnatural word order, and inconsistent terminology.
+Keep technical terms accurate; use Sinhala terms when natural and parenthesize English terms only when helpful.
 Do not change the answer index.
 Do not change the order or count of choices.
 Preserve the original English meaning and the correct answer.
-Use natural Sinhala suitable for an exam or benchmark.
+Do not add explanations, hints, or extra facts.
 Return JSON only. Do not include markdown.
 
 Input JSON:
