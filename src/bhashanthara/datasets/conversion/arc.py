@@ -85,7 +85,9 @@ def convert_arc_record(
     try:
         answer_index = choice_labels.index(answer_key)
     except ValueError as exc:
-        raise ARCConversionError(f"row {row_number}: answerKey does not match any choice label") from exc
+        raise ARCConversionError(
+            f"row {row_number}: answerKey does not match any choice label"
+        ) from exc
 
     answer_label = ANSWER_LABELS[answer_index]
     return MCQItem(
