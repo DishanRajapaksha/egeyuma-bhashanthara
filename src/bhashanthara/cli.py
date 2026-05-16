@@ -16,6 +16,7 @@ from bhashanthara.datasets.jsonl import (
     write_jsonl,
 )
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
+from bhashanthara.repair.patches import RepairError, apply_repair_records, export_repair_items
 from bhashanthara.reports.stats import collect_translation_stats
 from bhashanthara.review.labelstudio import (
     LABEL_CONFIG,
@@ -27,8 +28,10 @@ from bhashanthara.translate.pipeline import translate_many, translate_verify_ite
 app = typer.Typer(help="Local-first Sinhala benchmark translation and verification pipeline.")
 translate_app = typer.Typer(help="Translate and verify MCQ datasets.")
 review_app = typer.Typer(help="Export and import human review tasks.")
+repair_app = typer.Typer(help="Export and apply repaired translations.")
 app.add_typer(translate_app, name="translate")
 app.add_typer(review_app, name="review")
+app.add_typer(repair_app, name="repair")
 console = Console()
 
 
@@ -270,5 +273,60 @@ def import_labelstudio(
         raise typer.Exit(code=1)
 
     updated = apply_labelstudio_reviews(items, tasks)
+    write_jsonl(output, (item.model_dump() for item in updated))
+    console.print(f"[green]Wrote[/green] {output} ({len(updated)} items)")
+
+
+@repair_app.command("export")
+def export_repairs(
+    input: Annotated[Path, typer.Option(help="Translated Sinhala JSONL input.")],
+    output: Annotated[Path, typer.Option(help="Repair batch JSON output.")],
+    include_all: Annotated[
+        bool,
+        typer.Option(help="Export all items instead of suspicious items only."),
+    ] = False,
+) -> None:
+    """Export translated items into a repair batch JSON file."""
+
+    try:
+        items = load_translated_jsonl(input)
+    except DatasetError as exc:
+        console.print(f"[red]Invalid translated dataset:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    repairs = export_repair_items(items, suspicious_only=not include_all)
+    write_json(output, {"repairs": repairs})
+    console.print(f"[green]Wrote[/green] {output} ({len(repairs)} repairs)")
+
+
+@repair_app.command("apply")
+def apply_repairs(
+    input: Annotated[Path, typer.Option(help="Translated Sinhala JSONL input.")],
+    repairs: Annotated[Path, typer.Option(help="Repair batch JSON input.")],
+    output: Annotated[Path, typer.Option(help="Repaired translated JSONL output.")],
+) -> None:
+    """Apply repaired question and choice text back into translated JSONL."""
+
+    try:
+        items = load_translated_jsonl(input)
+        raw_repairs = json.loads(repairs.read_text(encoding="utf-8"))
+    except (DatasetError, json.JSONDecodeError) as exc:
+        console.print(f"[red]Invalid repair input:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if isinstance(raw_repairs, dict) and isinstance(raw_repairs.get("repairs"), list):
+        repair_records = raw_repairs["repairs"]
+    elif isinstance(raw_repairs, list):
+        repair_records = raw_repairs
+    else:
+        console.print("[red]Repair file must be a JSON list or an object with repairs.[/red]")
+        raise typer.Exit(code=1)
+
+    try:
+        updated = apply_repair_records(items, repair_records)
+    except RepairError as exc:
+        console.print(f"[red]Invalid repair record:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
     write_jsonl(output, (item.model_dump() for item in updated))
     console.print(f"[green]Wrote[/green] {output} ({len(updated)} items)")
