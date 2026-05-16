@@ -16,6 +16,7 @@ from bhashanthara.datasets.jsonl import (
     write_json,
     write_jsonl,
 )
+from bhashanthara.export.egeyuma import ExportStatus, export_egeyuma_items
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
 from bhashanthara.repair.patches import RepairError, apply_repair_records, export_repair_items
 from bhashanthara.reports.stats import collect_translation_stats
@@ -32,10 +33,12 @@ datasets_app = typer.Typer(help="Convert external datasets into Bhashanthara MCQ
 translate_app = typer.Typer(help="Translate and verify MCQ datasets.")
 review_app = typer.Typer(help="Export and import human review tasks.")
 repair_app = typer.Typer(help="Export and apply repaired translations.")
+export_app = typer.Typer(help="Export datasets for downstream evaluation tools.")
 app.add_typer(datasets_app, name="datasets")
 app.add_typer(translate_app, name="translate")
 app.add_typer(review_app, name="review")
 app.add_typer(repair_app, name="repair")
+app.add_typer(export_app, name="export")
 console = Console()
 
 
@@ -124,6 +127,35 @@ def convert_mmlu(
 
     write_jsonl(output, (item.model_dump() for item in items))
     console.print(f"[green]Wrote[/green] {output} ({len(items)} items)")
+
+
+@export_app.command("egeyuma")
+def export_egeyuma(
+    input: Annotated[Path, typer.Option(help="Translated Sinhala JSONL input.")],
+    output: Annotated[Path, typer.Option(help="Egeyuma-compatible MCQ JSONL output.")],
+    dataset_name: Annotated[str, typer.Option(help="Dataset name to write into exported items.")],
+    min_status: Annotated[
+        ExportStatus,
+        typer.Option(help="Minimum translation status to export."),
+    ] = "gold",
+    language: Annotated[str, typer.Option(help="Exported language code.")] = "si",
+) -> None:
+    """Export translated items into Egeyuma-compatible MCQ JSONL."""
+
+    try:
+        items = load_translated_jsonl(input)
+    except DatasetError as exc:
+        console.print(f"[red]Invalid translated dataset:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    exported = export_egeyuma_items(
+        items,
+        dataset_name=dataset_name,
+        min_status=min_status,
+        language=language,
+    )
+    write_jsonl(output, exported)
+    console.print(f"[green]Wrote[/green] {output} ({len(exported)} items)")
 
 
 @translate_app.command("validate")

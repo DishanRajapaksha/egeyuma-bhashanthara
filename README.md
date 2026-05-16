@@ -23,6 +23,7 @@ This repository now contains the first Python scaffold using `uv`:
 - Bronze/Silver decision logic
 - Label Studio export/import for human audit
 - repair batch export/apply workflow
+- Egeyuma-compatible export
 - translation statistics reporting
 - `bhashanthara` Typer CLI
 - sample English MCQ JSONL and MMLU CSV data
@@ -164,6 +165,21 @@ uv run bhashanthara repair apply \
   --output data/generated/mmlu-si-repaired.jsonl
 ```
 
+## Export for Egeyuma
+
+Export only trusted translated items into Egeyuma-compatible MCQ JSONL.
+
+```bash
+uv run bhashanthara export egeyuma \
+  --input data/generated/mmlu-si-gold-candidates.jsonl \
+  --output data/export/egeyuma-mmlu-si.jsonl \
+  --dataset-name sinhala-mmlu-translated \
+  --min-status gold \
+  --language si
+```
+
+`--min-status` accepts `bronze`, `silver`, or `gold`. Use `gold` for serious leaderboard data.
+
 ## Development
 
 ```bash
@@ -224,6 +240,7 @@ egeyuma-bhashanthara
   review
   repair
   dataset generation
+  Egeyuma export
 
 egeyuma
   evaluation
