@@ -641,7 +641,7 @@ def export_labelstudio(
 @review_app.command("import-labelstudio")
 def import_labelstudio(
     input: Annotated[Path, typer.Option(help="Translated Sinhala JSONL input.")],
-    labels: Annotated[Path, typer.Option(help="Label Studio exported task JSON."}],
+    labels: Annotated[Path, typer.Option(help="Label Studio exported task JSON.")],
     output: Annotated[Path, typer.Option(help="Reviewed translated JSONL output.")],
 ) -> None:
     """Import Label Studio decisions back into translated JSONL."""
