@@ -1,0 +1,15 @@
+Review the Sinhala translation quality of this multiple-choice question.
+
+Judge only the Sinhala quality, terminology, grammar, and exam suitability.
+Do not solve the question.
+Return JSON only. Do not include markdown.
+
+Input JSON:
+{input_json}
+
+Output JSON schema:
+{{
+  "decision": "accept" | "repair" | "reject" | "needs_human_review",
+  "score": 1,
+  "notes": "specific issue notes, or empty string"
+}}

@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+
+# uv
+uv.lock
+
+# Local configuration
+.env
+.env.*
+
+# Generated data and audits
+data/generated/
+audits/
+review/labelstudio_export.json
+
+# OS/editor
+.DS_Store
+.idea/
+.vscode/

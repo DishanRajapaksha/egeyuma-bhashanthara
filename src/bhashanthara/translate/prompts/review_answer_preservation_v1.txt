@@ -1,0 +1,22 @@
+Review whether the Sinhala translation preserves the English MCQ meaning and answer key.
+
+You must compare the English original and Sinhala translation.
+Check:
+- The Sinhala question preserves the English meaning.
+- Each Sinhala choice preserves the corresponding English choice.
+- The original correct answer remains correct.
+- No distractor became correct.
+- The translated question is not ambiguous.
+
+Return JSON only. Do not include markdown.
+
+Input JSON:
+{input_json}
+
+Output JSON schema:
+{{
+  "decision": "accept" | "repair" | "reject" | "needs_human_review",
+  "meaning_preserved": true,
+  "answer_preserved": true,
+  "notes": "specific issue notes, or empty string"
+}}

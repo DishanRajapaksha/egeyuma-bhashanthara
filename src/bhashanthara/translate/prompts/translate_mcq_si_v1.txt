@@ -1,0 +1,19 @@
+Translate the following English multiple-choice question into Sinhala.
+
+Rules:
+- Preserve the meaning of the question.
+- Preserve the order and count of choices.
+- Do not change the correct answer.
+- Keep technical terms accurate.
+- Use natural Sinhala suitable for an exam or benchmark.
+- Return JSON only. Do not include markdown.
+
+Input JSON:
+{input_json}
+
+Output JSON schema:
+{{
+  "question": "Sinhala translated question",
+  "choices": ["Sinhala choice A", "Sinhala choice B", "Sinhala choice C", "Sinhala choice D"],
+  "notes": "short note, or empty string"
+}}
