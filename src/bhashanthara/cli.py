@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Annotated
 
@@ -16,7 +17,11 @@ from bhashanthara.datasets.jsonl import (
 )
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
 from bhashanthara.reports.stats import collect_translation_stats
-from bhashanthara.review.labelstudio import LABEL_CONFIG, export_labelstudio_tasks
+from bhashanthara.review.labelstudio import (
+    LABEL_CONFIG,
+    apply_labelstudio_reviews,
+    export_labelstudio_tasks,
+)
 from bhashanthara.translate.pipeline import translate_many, translate_verify_item
 
 app = typer.Typer(help="Local-first Sinhala benchmark translation and verification pipeline.")
@@ -239,3 +244,31 @@ def export_labelstudio(
         label_config_output.parent.mkdir(parents=True, exist_ok=True)
         label_config_output.write_text(LABEL_CONFIG, encoding="utf-8")
         console.print(f"[green]Wrote[/green] {label_config_output}")
+
+
+@review_app.command("import-labelstudio")
+def import_labelstudio(
+    input: Annotated[Path, typer.Option(help="Translated Sinhala JSONL input.")],
+    labels: Annotated[Path, typer.Option(help="Label Studio exported task JSON.")],
+    output: Annotated[Path, typer.Option(help="Reviewed translated JSONL output.")],
+) -> None:
+    """Import Label Studio decisions back into translated JSONL."""
+
+    try:
+        items = load_translated_jsonl(input)
+        raw_labels = json.loads(labels.read_text(encoding="utf-8"))
+    except (DatasetError, json.JSONDecodeError) as exc:
+        console.print(f"[red]Invalid review import input:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    if isinstance(raw_labels, dict) and isinstance(raw_labels.get("tasks"), list):
+        tasks = raw_labels["tasks"]
+    elif isinstance(raw_labels, list):
+        tasks = raw_labels
+    else:
+        console.print("[red]Label Studio export must be a JSON list or an object with tasks.[/red]")
+        raise typer.Exit(code=1)
+
+    updated = apply_labelstudio_reviews(items, tasks)
+    write_jsonl(output, (item.model_dump() for item in updated))
+    console.print(f"[green]Wrote[/green] {output} ({len(updated)} items)")
