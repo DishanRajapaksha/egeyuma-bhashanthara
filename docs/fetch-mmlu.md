@@ -24,7 +24,7 @@ uv run bhashanthara datasets fetch mmlu \
 Then convert the subject CSV you want:
 
 ```bash
-uv run bhashanthara datasets convert-mmlu \
+uv run bhashanthara datasets convert mmlu \
   --input data/raw/mmlu/test/high_school_biology_test.csv \
   --output data/interim/mmlu-biology.jsonl \
   --subject high_school_biology \

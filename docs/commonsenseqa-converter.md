@@ -24,7 +24,7 @@ CommonsenseQA rows are expected to have this general shape:
 Convert a split like this:
 
 ```bash
-uv run bhashanthara datasets convert-commonsenseqa \
+uv run bhashanthara datasets convert commonsenseqa \
   --input data/raw/commonsenseqa/dev_rand_split.jsonl \
   --output data/interim/commonsenseqa.jsonl \
   --subject commonsenseqa \

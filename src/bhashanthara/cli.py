@@ -38,22 +38,26 @@ from bhashanthara.translate.pipeline import translate_many
 from bhashanthara.translate.resumable import run_resumable_pipeline
 
 app = typer.Typer(help="Local-first Sinhala benchmark translation and verification pipeline.")
-datasets_app = typer.Typer(help="Convert and fetch external datasets.")
+datasets_app = typer.Typer(help="Fetch and convert external datasets.")
 datasets_fetch_app = typer.Typer(help="Fetch external datasets into local raw-data folders.")
+datasets_convert_app = typer.Typer(help="Convert raw datasets into canonical MCQ JSONL.")
 translate_app = typer.Typer(help="Translate and verify MCQ datasets.")
 review_app = typer.Typer(help="Export and import human review tasks.")
 repair_app = typer.Typer(help="Export and apply repaired translations.")
 export_app = typer.Typer(help="Export datasets for downstream evaluation tools.")
 manifest_app = typer.Typer(help="Create run manifests and provenance records.")
 pilot_app = typer.Typer(help="Create small pilot datasets.")
+
 app.add_typer(datasets_app, name="datasets")
 datasets_app.add_typer(datasets_fetch_app, name="fetch")
+datasets_app.add_typer(datasets_convert_app, name="convert")
 app.add_typer(translate_app, name="translate")
 app.add_typer(review_app, name="review")
 app.add_typer(repair_app, name="repair")
 app.add_typer(export_app, name="export")
 app.add_typer(manifest_app, name="manifest")
 app.add_typer(pilot_app, name="pilot")
+
 console = Console()
 PROMPT_DIR = Path(__file__).resolve().parent / "translate" / "prompts"
 
@@ -202,7 +206,36 @@ def fetch_mmlu(
     console.print(f"[green]Fetched[/green] {dataset_name} -> {downloaded_path}")
 
 
-@datasets_app.command("convert-arc")
+@datasets_convert_app.command("mmlu")
+def convert_mmlu(
+    input: Annotated[Path, typer.Option(help="MMLU CSV input: question,A,B,C,D,answer.")],
+    output: Annotated[Path, typer.Option(help="Canonical MCQ JSONL output.")],
+    subject: Annotated[str, typer.Option(help="MMLU subject name.")],
+    domain: Annotated[str | None, typer.Option(help="Optional broad domain.")] = None,
+    source: Annotated[str, typer.Option(help="Source dataset name.")] = "cais/mmlu",
+    source_license: Annotated[str, typer.Option(help="Source dataset licence.")] = "MIT",
+    id_prefix: Annotated[str | None, typer.Option(help="Optional item ID prefix.")] = None,
+) -> None:
+    """Convert an MMLU CSV file into canonical MCQ JSONL."""
+
+    try:
+        items = convert_mmlu_csv(
+            input,
+            subject=subject,
+            domain=domain,
+            source=source,
+            source_license=source_license,
+            id_prefix=id_prefix,
+        )
+    except MMLUConversionError as exc:
+        console.print(f"[red]Invalid MMLU CSV:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    write_jsonl(output, (item.model_dump() for item in items))
+    console.print(f"[green]Wrote[/green] {output} ({len(items)} items)")
+
+
+@datasets_convert_app.command("arc")
 def convert_arc(
     input: Annotated[Path, typer.Option(help="ARC JSONL input file.")],
     output: Annotated[Path, typer.Option(help="Canonical MCQ JSONL output.")],
@@ -236,7 +269,7 @@ def convert_arc(
     console.print(f"[green]Wrote[/green] {output} ({len(items)} items)")
 
 
-@datasets_app.command("convert-commonsenseqa")
+@datasets_convert_app.command("commonsenseqa")
 def convert_commonsenseqa(
     input: Annotated[Path, typer.Option(help="CommonsenseQA JSONL input file.")],
     output: Annotated[Path, typer.Option(help="Canonical MCQ JSONL output.")],
@@ -264,35 +297,6 @@ def convert_commonsenseqa(
         )
     except (CommonsenseQAConversionError, DatasetError) as exc:
         console.print(f"[red]Invalid CommonsenseQA JSONL:[/red] {exc}")
-        raise typer.Exit(code=1) from exc
-
-    write_jsonl(output, (item.model_dump() for item in items))
-    console.print(f"[green]Wrote[/green] {output} ({len(items)} items)")
-
-
-@datasets_app.command("convert-mmlu")
-def convert_mmlu(
-    input: Annotated[Path, typer.Option(help="MMLU CSV input: question,A,B,C,D,answer.")],
-    output: Annotated[Path, typer.Option(help="Canonical MCQ JSONL output.")],
-    subject: Annotated[str, typer.Option(help="MMLU subject name.")],
-    domain: Annotated[str | None, typer.Option(help="Optional broad domain.")] = None,
-    source: Annotated[str, typer.Option(help="Source dataset name.")] = "cais/mmlu",
-    source_license: Annotated[str, typer.Option(help="Source dataset licence.")] = "MIT",
-    id_prefix: Annotated[str | None, typer.Option(help="Optional item ID prefix.")] = None,
-) -> None:
-    """Convert an MMLU CSV file into canonical MCQ JSONL."""
-
-    try:
-        items = convert_mmlu_csv(
-            input,
-            subject=subject,
-            domain=domain,
-            source=source,
-            source_license=source_license,
-            id_prefix=id_prefix,
-        )
-    except MMLUConversionError as exc:
-        console.print(f"[red]Invalid MMLU CSV:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
     write_jsonl(output, (item.model_dump() for item in items))
@@ -568,6 +572,13 @@ def pipeline(
         f"translated={summary.translated} "
         f"failed={summary.failed}"
     )
+
+    models = {"translator": translator}
+    if sinhala_reviewer is not None:
+        models["sinhala_reviewer"] = sinhala_reviewer
+    if answer_reviewer is not None:
+        models["answer_reviewer"] = answer_reviewer
+
     _write_auto_manifest(
         output=manifest_output,
         run_id=default_run_id("translate_pipeline"),
@@ -577,15 +588,7 @@ def pipeline(
             include_sinhala_review=sinhala_reviewer is not None,
             include_answer_review=answer_reviewer is not None,
         ),
-        models={
-            key: value
-            for key, value in {
-                "translator": translator,
-                "sinhala_reviewer": sinhala_reviewer,
-                "answer_reviewer": answer_reviewer,
-            }.items()
-            if value is not None
-        },
+        models=models,
         parameters={
             "base_url": base_url,
             "temperature": temperature,
