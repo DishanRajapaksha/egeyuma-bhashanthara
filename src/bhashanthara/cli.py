@@ -9,6 +9,10 @@ from rich.console import Console
 from rich.table import Table
 
 from bhashanthara.datasets.conversion.arc import ARCConversionError, convert_arc_jsonl
+from bhashanthara.datasets.conversion.commonsenseqa import (
+    CommonsenseQAConversionError,
+    convert_commonsenseqa_jsonl,
+)
 from bhashanthara.datasets.conversion.mmlu import MMLUConversionError, convert_mmlu_csv
 from bhashanthara.datasets.jsonl import (
     DatasetError,
@@ -191,6 +195,40 @@ def convert_arc(
         )
     except (ARCConversionError, DatasetError) as exc:
         console.print(f"[red]Invalid ARC JSONL:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    write_jsonl(output, (item.model_dump() for item in items))
+    console.print(f"[green]Wrote[/green] {output} ({len(items)} items)")
+
+
+@datasets_app.command("convert-commonsenseqa")
+def convert_commonsenseqa(
+    input: Annotated[Path, typer.Option(help="CommonsenseQA JSONL input file.")],
+    output: Annotated[Path, typer.Option(help="Canonical MCQ JSONL output.")],
+    subject: Annotated[str, typer.Option(help="CommonsenseQA subject name.")],
+    domain: Annotated[str | None, typer.Option(help="Optional broad domain.")] = None,
+    source: Annotated[str, typer.Option(help="Source dataset name.")] = "commonsenseqa",
+    source_license: Annotated[str, typer.Option(help="Source dataset licence.")] = "unknown",
+    id_prefix: Annotated[str | None, typer.Option(help="Optional item ID prefix.")] = None,
+    allow_variable_choices: Annotated[
+        bool,
+        typer.Option(help="Allow non-5-choice CommonsenseQA rows."),
+    ] = False,
+) -> None:
+    """Convert a CommonsenseQA JSONL file into canonical MCQ JSONL."""
+
+    try:
+        items = convert_commonsenseqa_jsonl(
+            input,
+            subject=subject,
+            domain=domain,
+            source=source,
+            source_license=source_license,
+            id_prefix=id_prefix,
+            require_five_choices=not allow_variable_choices,
+        )
+    except (CommonsenseQAConversionError, DatasetError) as exc:
+        console.print(f"[red]Invalid CommonsenseQA JSONL:[/red] {exc}")
         raise typer.Exit(code=1) from exc
 
     write_jsonl(output, (item.model_dump() for item in items))
