@@ -69,6 +69,7 @@ def _client(
     api_key: str,
     temperature: float,
     max_tokens: int,
+    timeout_seconds: float,
 ) -> OpenAICompatibleClient:
     return OpenAICompatibleClient(
         model=model,
@@ -76,6 +77,7 @@ def _client(
         api_key=api_key,
         temperature=temperature,
         max_tokens=max_tokens,
+        timeout_seconds=timeout_seconds,
     )
 
 
@@ -450,6 +452,10 @@ def generate(
     api_key: Annotated[str, typer.Option(help="API key for the endpoint.")] = "local-key",
     temperature: Annotated[float, typer.Option(help="Sampling temperature.")] = 0.0,
     max_tokens: Annotated[int, typer.Option(help="Maximum generated tokens.")] = 2048,
+    timeout_seconds: Annotated[
+        float,
+        typer.Option(help="HTTP timeout per model request, in seconds."),
+    ] = 300.0,
     limit: Annotated[int | None, typer.Option(help="Optional item limit for pilots.")] = None,
 ) -> None:
     """Generate Bronze Sinhala translations using one model."""
@@ -466,6 +472,7 @@ def generate(
         api_key=api_key,
         temperature=temperature,
         max_tokens=max_tokens,
+        timeout_seconds=timeout_seconds,
     )
     translated = translate_many(items, client, limit=limit)
     write_jsonl(output, (item.model_dump() for item in translated))
@@ -492,6 +499,10 @@ def pipeline(
     api_key: Annotated[str, typer.Option(help="API key for the endpoint.")] = "local-key",
     temperature: Annotated[float, typer.Option(help="Sampling temperature.")] = 0.0,
     max_tokens: Annotated[int, typer.Option(help="Maximum generated tokens.")] = 2048,
+    timeout_seconds: Annotated[
+        float,
+        typer.Option(help="HTTP timeout per model request, in seconds."),
+    ] = 300.0,
     limit: Annotated[int | None, typer.Option(help="Optional item limit for pilots.")] = None,
     resume: Annotated[bool, typer.Option(help="Skip items already present in output.")] = False,
     continue_on_error: Annotated[
@@ -523,6 +534,7 @@ def pipeline(
         api_key=api_key,
         temperature=temperature,
         max_tokens=max_tokens,
+        timeout_seconds=timeout_seconds,
     )
     sinhala_client = (
         _client(
@@ -531,6 +543,7 @@ def pipeline(
             api_key=api_key,
             temperature=temperature,
             max_tokens=max_tokens,
+            timeout_seconds=timeout_seconds,
         )
         if sinhala_reviewer
         else None
@@ -542,6 +555,7 @@ def pipeline(
             api_key=api_key,
             temperature=temperature,
             max_tokens=max_tokens,
+            timeout_seconds=timeout_seconds,
         )
         if answer_reviewer
         else None
@@ -593,6 +607,7 @@ def pipeline(
             "base_url": base_url,
             "temperature": temperature,
             "max_tokens": max_tokens,
+            "timeout_seconds": timeout_seconds,
             "limit": limit,
             "resume": resume,
             "continue_on_error": continue_on_error,
@@ -618,6 +633,10 @@ def backtranslate(
     api_key: Annotated[str, typer.Option(help="API key for the endpoint.")] = "local-key",
     temperature: Annotated[float, typer.Option(help="Sampling temperature.")] = 0.0,
     max_tokens: Annotated[int, typer.Option(help="Maximum generated tokens.")] = 2048,
+    timeout_seconds: Annotated[
+        float,
+        typer.Option(help="HTTP timeout per model request, in seconds."),
+    ] = 300.0,
     limit: Annotated[int | None, typer.Option(help="Optional item limit for pilots.")] = None,
 ) -> None:
     """Backtranslate Sinhala items into English for drift inspection."""
@@ -634,6 +653,7 @@ def backtranslate(
         api_key=api_key,
         temperature=temperature,
         max_tokens=max_tokens,
+        timeout_seconds=timeout_seconds,
     )
     updated = add_backtranslations(items, client, limit=limit)
     write_jsonl(output, (item.model_dump() for item in updated))

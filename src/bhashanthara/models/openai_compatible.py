@@ -23,7 +23,7 @@ class OpenAICompatibleClient:
     api_key: str = "local-key"
     temperature: float = 0.0
     max_tokens: int = 2048
-    timeout_seconds: float = 120.0
+    timeout_seconds: float = 300.0
 
     def complete(self, prompt: str) -> ModelResponse:
         url = self.base_url.rstrip("/") + "/chat/completions"
