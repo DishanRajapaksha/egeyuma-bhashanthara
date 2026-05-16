@@ -23,7 +23,7 @@ ARC rows are expected to have this general shape:
 Convert ARC Challenge or ARC Easy like this:
 
 ```bash
-uv run bhashanthara datasets convert-arc \
+uv run bhashanthara datasets convert arc \
   --input data/raw/arc/ARC-Challenge-Test.jsonl \
   --output data/interim/arc-challenge.jsonl \
   --subject arc_challenge \
