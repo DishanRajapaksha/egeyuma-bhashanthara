@@ -1,0 +1,17 @@
+Translate the following Sinhala multiple-choice question back into English.
+
+Rules:
+- Preserve the meaning of the Sinhala question.
+- Preserve the order and count of choices.
+- Do not answer the question.
+- Return JSON only. Do not include markdown.
+
+Input JSON:
+{input_json}
+
+Output JSON schema:
+{{
+  "question": "English back-translated question",
+  "choices": ["English choice A", "English choice B", "English choice C", "English choice D"],
+  "notes": "short note, or empty string"
+}}

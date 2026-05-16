@@ -17,6 +17,7 @@ This repository now contains the first Python scaffold using `uv`:
 - translated MCQ schema with translation metadata
 - OpenAI-compatible local model client
 - prompt templates for translation and verification
+- backtranslation audit support
 - automatic translation checks
 - Bronze/Silver decision logic
 - Label Studio export/import for human audit
@@ -68,6 +69,22 @@ uv run bhashanthara translate pipeline \
   --api-key local-key \
   --limit 2
 ```
+
+## Backtranslate for drift inspection
+
+Backtranslation translates Sinhala items back into English so a reviewer can quickly spot meaning drift.
+
+```bash
+uv run bhashanthara translate backtranslate \
+  --input data/generated/mmlu-si-silver.jsonl \
+  --output data/generated/mmlu-si-with-backtranslation.jsonl \
+  --model qwen3-14b \
+  --base-url http://localhost:1234/v1 \
+  --api-key local-key \
+  --report-output audits/mmlu-si-backtranslations.json
+```
+
+Backtranslation is an audit signal, not proof of quality. It helps find smoke; it does not certify the building.
 
 ## Inspect translation stats
 
@@ -195,103 +212,6 @@ egeyuma
 
 Translation and repair are data-generation steps. Evaluation should remain deterministic. Mixing the two would make benchmark runs slippery and hard to reproduce.
 
-## Dataset format
-
-### Input
-
-Bhashanthara starts with canonical English MCQ JSONL.
-
-```json
-{
-  "id": "mmlu_biology_001",
-  "task_type": "mcq",
-  "question": "Which gas is used by plants for photosynthesis?",
-  "choices": [
-    "Oxygen",
-    "Carbon dioxide",
-    "Nitrogen",
-    "Hydrogen"
-  ],
-  "answer_index": 1,
-  "answer_label": "B",
-  "subject": "biology",
-  "domain": "science",
-  "language_style": "formal_english",
-  "source": "cais/mmlu",
-  "metadata": {
-    "source_dataset": "cais/mmlu",
-    "source_license": "MIT",
-    "original_language": "en"
-  }
-}
-```
-
-### Output
-
-The Sinhala item keeps the original answer index and records translation metadata.
-
-```json
-{
-  "id": "mmlu_biology_001_si",
-  "task_type": "mcq",
-  "question": "ප්‍රභාසංශ්ලේෂණය සඳහා ශාක භාවිතා කරන වායුව කුමක්ද?",
-  "choices": [
-    "ඔක්සිජන්",
-    "කාබන් ඩයොක්සයිඩ්",
-    "නයිට්‍රජන්",
-    "හයිඩ්‍රජන්"
-  ],
-  "answer_index": 1,
-  "answer_label": "B",
-  "subject": "biology",
-  "domain": "science",
-  "language_style": "translated_sinhala",
-  "source": "translated_from:cais/mmlu",
-  "metadata": {
-    "original_id": "mmlu_biology_001",
-    "source_dataset": "cais/mmlu",
-    "source_license": "MIT",
-    "translation": {
-      "source_language": "en",
-      "target_language": "si",
-      "status": "silver",
-      "translator_model": "lmstudio/qwen3-14b",
-      "sinhala_reviewer_model": "lmstudio/gemma-3-12b",
-      "answer_reviewer_model": "lmstudio/qwen3-32b",
-      "automatic_checks": {
-        "same_choice_count": true,
-        "answer_index_preserved": true,
-        "no_empty_fields": true,
-        "no_duplicate_choices": true,
-        "sinhala_ratio": 0.86
-      },
-      "reviews": {
-        "sinhala_quality": {
-          "decision": "accept",
-          "score": 4,
-          "notes": ""
-        },
-        "answer_preservation": {
-          "decision": "accept",
-          "meaning_preserved": true,
-          "answer_preserved": true,
-          "notes": ""
-        }
-      },
-      "human_review": {
-        "decision": "accept",
-        "failure_reasons": [],
-        "notes": "Looks correct."
-      },
-      "repair": {
-        "status": "applied",
-        "notes": "Fixed terminology."
-      }
-    }
-  }
-}
-```
-
 ## Quality tiers
 
 Bhashanthara separates translated data into explicit trust levels.
@@ -347,30 +267,6 @@ Examples:
 - valid JSON output from the translator
 - translated choices are not absurdly short or long
 - model did not include explanations outside JSON
-
-## Verification decisions
-
-Verifier output should use strict decisions.
-
-```text
-accept
-repair
-reject
-needs_human_review
-```
-
-Failure reasons should be explicit.
-
-```text
-answer_changed
-meaning_changed
-ambiguous_question
-duplicate_choices
-bad_sinhala
-domain_term_error
-formatting_error
-json_error
-```
 
 ## Human review
 
