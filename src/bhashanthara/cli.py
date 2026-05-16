@@ -17,6 +17,7 @@ from bhashanthara.datasets.conversion.mmlu import MMLUConversionError, convert_m
 from bhashanthara.datasets.fetch import DatasetFetchError, fetch_huggingface_dataset
 from bhashanthara.datasets.jsonl import (
     DatasetError,
+    append_jsonl,
     load_mcq_jsonl,
     load_translated_jsonl,
     write_json,
@@ -142,6 +143,21 @@ def _original_id_for_review(item_id: str, metadata: dict[str, Any]) -> str:
     if item_id.endswith("_si"):
         return item_id.removesuffix("_si")
     return item_id
+
+
+def _review_failure_record(
+    *,
+    original_id: str,
+    translated_id: str,
+    exc: Exception,
+) -> dict[str, Any]:
+    return {
+        "original_id": original_id,
+        "translated_id": translated_id,
+        "stage": "review",
+        "error_type": type(exc).__name__,
+        "error_message": str(exc),
+    }
 
 
 @app.command()
@@ -478,6 +494,15 @@ def review_translated(
         typer.Option(help="HTTP timeout per model request, in seconds."),
     ] = 300.0,
     limit: Annotated[int | None, typer.Option(help="Optional item limit for pilots.")] = None,
+    continue_on_error: Annotated[
+        bool,
+        typer.Option(help="Continue after review failures instead of stopping the run."),
+    ] = False,
+    failures_output: Annotated[
+        Path | None,
+        typer.Option(help="Optional JSONL path for failed review items."),
+    ] = None,
+    max_retries: Annotated[int, typer.Option(help="Retries per failed item before giving up.")] = 0,
 ) -> None:
     """Review existing translations without regenerating them."""
 
@@ -494,6 +519,7 @@ def review_translated(
 
     originals_by_id = {item.id: item for item in originals}
     selected = translated_items[:limit] if limit is not None else translated_items
+    remaining = translated_items[len(selected) :]
 
     sinhala_client = (
         _client(
@@ -532,7 +558,12 @@ def review_translated(
         else None
     )
 
-    reviewed = []
+    write_jsonl(output, [])
+    if failures_output is not None:
+        write_jsonl(failures_output, [])
+    reviewed_count = 0
+    failed_count = 0
+
     for index, translated_item in enumerate(selected, start=1):
         original_id = _original_id_for_review(translated_item.id, translated_item.metadata)
         original = originals_by_id.get(original_id)
@@ -543,18 +574,60 @@ def review_translated(
             raise typer.Exit(code=1)
 
         console.print(f"Reviewing {index}/{len(selected)}: {translated_item.id}")
-        reviewed.append(
-            review_existing_translation(
-                original,
-                translated_item,
-                sinhala_reviewer=sinhala_client,
-                answer_reviewer=answer_client,
-                repairer=repair_client,
-            )
-        )
+        reviewed_item = None
+        last_error: Exception | None = None
+        for _ in range(max_retries + 1):
+            try:
+                reviewed_item = review_existing_translation(
+                    original,
+                    translated_item,
+                    sinhala_reviewer=sinhala_client,
+                    answer_reviewer=answer_client,
+                    repairer=repair_client,
+                )
+                break
+            except Exception as exc:  # pragma: no cover - provider-specific errors vary.
+                last_error = exc
 
-    write_jsonl(output, (item.model_dump() for item in reviewed))
-    console.print(f"[green]Wrote[/green] {output} ({len(reviewed)} items)")
+        if reviewed_item is None:
+            failed_count += 1
+            if failures_output is not None and last_error is not None:
+                append_jsonl(
+                    failures_output,
+                    [
+                        _review_failure_record(
+                            original_id=original_id,
+                            translated_id=translated_item.id,
+                            exc=last_error,
+                        )
+                    ],
+                )
+            append_jsonl(output, [translated_item.model_dump()])
+            console.print(f"[yellow]Preserved failed item unchanged[/yellow] {translated_item.id}")
+            if not continue_on_error:
+                unprocessed = selected[index:] + remaining
+                if unprocessed:
+                    append_jsonl(output, (item.model_dump() for item in unprocessed))
+                    console.print(
+                        f"[yellow]Preserved unprocessed items[/yellow] {len(unprocessed)}"
+                    )
+                if last_error is not None:
+                    raise last_error
+                raise RuntimeError("review failed without an exception")
+            continue
+
+        append_jsonl(output, [reviewed_item.model_dump()])
+        reviewed_count += 1
+        console.print(f"[green]Wrote reviewed item[/green] {reviewed_item.id}")
+
+    if remaining:
+        append_jsonl(output, (item.model_dump() for item in remaining))
+        console.print(f"[green]Preserved unchanged items[/green] {len(remaining)}")
+
+    console.print(
+        "[green]Review complete[/green]: "
+        f"reviewed={reviewed_count} failed={failed_count} output={output}"
+    )
 
 
 @translate_app.command("generate")
