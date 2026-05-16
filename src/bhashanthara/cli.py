@@ -14,6 +14,7 @@ from bhashanthara.datasets.conversion.commonsenseqa import (
     convert_commonsenseqa_jsonl,
 )
 from bhashanthara.datasets.conversion.mmlu import MMLUConversionError, convert_mmlu_csv
+from bhashanthara.datasets.fetch import DatasetFetchError, fetch_huggingface_dataset
 from bhashanthara.datasets.jsonl import (
     DatasetError,
     load_mcq_jsonl,
@@ -37,7 +38,8 @@ from bhashanthara.translate.pipeline import translate_many
 from bhashanthara.translate.resumable import run_resumable_pipeline
 
 app = typer.Typer(help="Local-first Sinhala benchmark translation and verification pipeline.")
-datasets_app = typer.Typer(help="Convert external datasets into Bhashanthara MCQ JSONL.")
+datasets_app = typer.Typer(help="Convert and fetch external datasets.")
+datasets_fetch_app = typer.Typer(help="Fetch external datasets into local raw-data folders.")
 translate_app = typer.Typer(help="Translate and verify MCQ datasets.")
 review_app = typer.Typer(help="Export and import human review tasks.")
 repair_app = typer.Typer(help="Export and apply repaired translations.")
@@ -45,6 +47,7 @@ export_app = typer.Typer(help="Export datasets for downstream evaluation tools."
 manifest_app = typer.Typer(help="Create run manifests and provenance records.")
 pilot_app = typer.Typer(help="Create small pilot datasets.")
 app.add_typer(datasets_app, name="datasets")
+datasets_app.add_typer(datasets_fetch_app, name="fetch")
 app.add_typer(translate_app, name="translate")
 app.add_typer(review_app, name="review")
 app.add_typer(repair_app, name="repair")
@@ -165,6 +168,38 @@ def stats(
     if output is not None:
         write_json(output, report.as_dict())
         console.print(f"[green]Wrote[/green] {output}")
+
+
+@datasets_fetch_app.command("mmlu")
+def fetch_mmlu(
+    output_dir: Annotated[
+        Path,
+        typer.Option(help="Local output directory for fetched MMLU files."),
+    ] = Path("data/raw/mmlu"),
+    dataset_name: Annotated[
+        str,
+        typer.Option(help="Hugging Face dataset name or alias."),
+    ] = "mmlu",
+    revision: Annotated[str | None, typer.Option(help="Optional dataset revision.")] = None,
+    allow_pattern: Annotated[
+        list[str] | None,
+        typer.Option("--allow-pattern", help="Optional Hugging Face allow pattern."),
+    ] = None,
+) -> None:
+    """Fetch MMLU from Hugging Face into a local raw-data directory."""
+
+    try:
+        downloaded_path = fetch_huggingface_dataset(
+            dataset_name=dataset_name,
+            output_dir=output_dir,
+            revision=revision,
+            allow_patterns=allow_pattern,
+        )
+    except DatasetFetchError as exc:
+        console.print(f"[red]Dataset fetch failed:[/red] {exc}")
+        raise typer.Exit(code=1) from exc
+
+    console.print(f"[green]Fetched[/green] {dataset_name} -> {downloaded_path}")
 
 
 @datasets_app.command("convert-arc")
