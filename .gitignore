@@ -25,8 +25,7 @@ build/
 .env
 .env.*
 
-# Generated data and audits
-data/generated/
+# Audits
 audits/
 review/labelstudio_export.json
 
