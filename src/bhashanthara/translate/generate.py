@@ -3,7 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from bhashanthara.datasets.schema import MCQItem, TranslationCandidate, TranslatedMCQItem, translated_item_from_candidate
+from bhashanthara.datasets.schema import (
+    MCQItem,
+    TranslatedMCQItem,
+    TranslationCandidate,
+    translated_item_from_candidate,
+)
 from bhashanthara.models.openai_compatible import OpenAICompatibleClient
 from bhashanthara.translate.json_utils import extract_json_object
 
