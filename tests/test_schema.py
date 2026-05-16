@@ -3,7 +3,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from bhashanthara.datasets.schema import MCQItem, TranslationCandidate, translated_item_from_candidate
+from bhashanthara.datasets.schema import (
+    MCQItem,
+    TranslationCandidate,
+    translated_item_from_candidate,
+)
 
 
 def test_mcq_item_validates_answer_alignment() -> None:
