@@ -52,7 +52,8 @@ def test_convert_mmlu_row_rejects_bad_column_count() -> None:
 def test_convert_mmlu_csv_reads_rows(tmp_path: Path) -> None:
     csv_path = tmp_path / "sample.csv"
     csv_path.write_text(
-        "Which gas is used by plants for photosynthesis?,Oxygen,Carbon dioxide,Nitrogen,Hydrogen,B\n"
+        "Which gas is used by plants for photosynthesis?,"
+        "Oxygen,Carbon dioxide,Nitrogen,Hydrogen,B\n"
         "What is the chemical formula of water?,CO2,H2O,O2,NaCl,B\n",
         encoding="utf-8",
     )
