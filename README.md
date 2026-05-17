@@ -36,6 +36,7 @@ uv run bhashanthara translate pipeline \
   --input data/interim/mmlu-biology.jsonl \
   --output data/generated/mmlu-biology-si-silver.jsonl \
   --translator google/gemma-4-31b \
+  --repairer google/gemma-4-31b \
   --sinhala-reviewer google/gemma-4-31b \
   --answer-reviewer google/gemma-4-31b \
   --base-url http://localhost:1234/v1 \

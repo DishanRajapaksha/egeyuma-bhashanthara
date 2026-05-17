@@ -40,11 +40,34 @@ def translate_and_check(
 def translate_verify_item(
     item: MCQItem,
     translator: OpenAICompatibleClient,
+    repairer: OpenAICompatibleClient | None = None,
     sinhala_reviewer: OpenAICompatibleClient | None = None,
     answer_reviewer: OpenAICompatibleClient | None = None,
 ) -> TranslatedMCQItem:
     translated = translate_and_check(item, translator)
     translation = TranslationMetadata.model_validate(translated.metadata["translation"])
+
+    if repairer is not None:
+        repair = repair_translation(item, translated, repairer)
+        if len(repair.choices) != len(translated.choices):
+            raise ValueError(
+                f"repair for {translated.id} changes choice count from "
+                f"{len(translated.choices)} to {len(repair.choices)}"
+            )
+        metadata = dict(translated.metadata)
+        metadata["repair"] = {
+            "status": "model_applied",
+            "model": repairer.model,
+            "notes": repair.notes,
+        }
+        translated = translated.model_copy(
+            update={
+                "question": repair.question,
+                "choices": repair.choices,
+                "metadata": metadata,
+            }
+        )
+        translation.automatic_checks = run_automatic_checks(item, translated)
 
     sinhala_review = None
     answer_review = None
@@ -101,6 +124,7 @@ def review_existing_translation(
                 "metadata": metadata,
             }
         )
+        translation.automatic_checks = run_automatic_checks(original, reviewed_item)
 
     if translation.automatic_checks is None:
         translation.automatic_checks = run_automatic_checks(original, reviewed_item)

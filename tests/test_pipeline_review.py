@@ -10,7 +10,7 @@ from bhashanthara.datasets.schema import (
     TranslationRepairCandidate,
 )
 from bhashanthara.translate import pipeline
-from bhashanthara.translate.pipeline import review_existing_translation
+from bhashanthara.translate.pipeline import review_existing_translation, translate_verify_item
 
 
 def original() -> MCQItem:
@@ -143,3 +143,46 @@ def test_review_existing_translation_rejects_repair_choice_count_change(
             translated(),
             repairer=FakeClient(),  # type: ignore[arg-type]
         )
+
+
+def test_translate_verify_item_repairs_before_reviewing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        model = "model"
+
+    def fake_translate(*args: object, **kwargs: object) -> TranslatedMCQItem:
+        return translated()
+
+    def fake_repair(*args: object, **kwargs: object) -> TranslationRepairCandidate:
+        return TranslationRepairCandidate(
+            question="නව ප්‍රශ්නය?",
+            choices=["නව එක", "නව දෙක", "නව තුන", "නව හතර"],
+            notes="Fixed wording.",
+        )
+
+    reviewed_questions: list[str] = []
+
+    def fake_sinhala_review(
+        original_item: MCQItem,
+        translated_item: TranslatedMCQItem,
+        client: object,
+    ) -> SinhalaQualityReview:
+        reviewed_questions.append(translated_item.question)
+        return SinhalaQualityReview(decision="accept", score=4, notes="Good.")
+
+    monkeypatch.setattr(pipeline, "translate_item", fake_translate)
+    monkeypatch.setattr(pipeline, "repair_translation", fake_repair)
+    monkeypatch.setattr(pipeline, "review_sinhala_quality", fake_sinhala_review)
+
+    reviewed = translate_verify_item(
+        original(),
+        translator=FakeClient(),  # type: ignore[arg-type]
+        repairer=FakeClient(),  # type: ignore[arg-type]
+        sinhala_reviewer=FakeClient(),  # type: ignore[arg-type]
+    )
+
+    assert reviewed.question == "නව ප්‍රශ්නය?"
+    assert reviewed.metadata["repair"]["status"] == "model_applied"
+    assert reviewed.metadata["translation"]["automatic_checks"]["no_empty_fields"] is True
+    assert reviewed_questions == ["නව ප්‍රශ්නය?"]

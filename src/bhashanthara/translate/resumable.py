@@ -65,6 +65,7 @@ def failure_from_exception(
 def run_with_retries(
     item: MCQItem,
     translator: OpenAICompatibleClient,
+    repairer: OpenAICompatibleClient | None,
     sinhala_reviewer: OpenAICompatibleClient | None,
     answer_reviewer: OpenAICompatibleClient | None,
     max_retries: int,
@@ -75,6 +76,7 @@ def run_with_retries(
             return translate_verify_item(
                 item,
                 translator=translator,
+                repairer=repairer,
                 sinhala_reviewer=sinhala_reviewer,
                 answer_reviewer=answer_reviewer,
             )
@@ -90,6 +92,7 @@ def run_resumable_pipeline(
     items: list[MCQItem],
     output_path: Path,
     translator: OpenAICompatibleClient,
+    repairer: OpenAICompatibleClient | None = None,
     sinhala_reviewer: OpenAICompatibleClient | None = None,
     answer_reviewer: OpenAICompatibleClient | None = None,
     failures_output: Path | None = None,
@@ -124,6 +127,7 @@ def run_resumable_pipeline(
             translated = run_with_retries(
                 item,
                 translator=translator,
+                repairer=repairer,
                 sinhala_reviewer=sinhala_reviewer,
                 answer_reviewer=answer_reviewer,
                 max_retries=max_retries,

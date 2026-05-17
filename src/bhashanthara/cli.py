@@ -125,10 +125,13 @@ def _write_auto_manifest(
 
 def _pipeline_prompt_files(
     *,
+    include_repair: bool,
     include_sinhala_review: bool,
     include_answer_review: bool,
 ) -> list[Path]:
     prompts = [PROMPT_DIR / "translate_mcq_si_v1.txt"]
+    if include_repair:
+        prompts.append(PROMPT_DIR / "repair_translation_v1.txt")
     if include_sinhala_review:
         prompts.append(PROMPT_DIR / "review_sinhala_quality_v1.txt")
     if include_answer_review:
@@ -674,6 +677,10 @@ def pipeline(
     input: Annotated[Path, typer.Option(help="Canonical English MCQ JSONL input.")],
     output: Annotated[Path, typer.Option(help="Verified Sinhala JSONL output.")],
     translator: Annotated[str, typer.Option(help="Translator model name.")],
+    repairer: Annotated[
+        str | None,
+        typer.Option(help="Optional model that rewrites the Sinhala question and choices."),
+    ] = None,
     sinhala_reviewer: Annotated[
         str | None,
         typer.Option(help="Optional Sinhala quality reviewer model."),
@@ -750,12 +757,25 @@ def pipeline(
         if answer_reviewer
         else None
     )
+    repair_client = (
+        _client(
+            model=repairer,
+            base_url=base_url,
+            api_key=api_key,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout_seconds=timeout_seconds,
+        )
+        if repairer
+        else None
+    )
 
     try:
         summary = run_resumable_pipeline(
             items=items,
             output_path=output,
             translator=translator_client,
+            repairer=repair_client,
             sinhala_reviewer=sinhala_client,
             answer_reviewer=answer_client,
             failures_output=failures_output,
@@ -778,6 +798,8 @@ def pipeline(
     )
 
     models = {"translator": translator}
+    if repairer is not None:
+        models["repairer"] = repairer
     if sinhala_reviewer is not None:
         models["sinhala_reviewer"] = sinhala_reviewer
     if answer_reviewer is not None:
@@ -789,6 +811,7 @@ def pipeline(
         source_files=[input],
         output_files=[output],
         prompt_files=_pipeline_prompt_files(
+            include_repair=repairer is not None,
             include_sinhala_review=sinhala_reviewer is not None,
             include_answer_review=answer_reviewer is not None,
         ),
